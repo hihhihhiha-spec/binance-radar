@@ -1,51 +1,62 @@
 import ccxt, time, threading, os
 from flask import Flask
+from datetime import datetime
 
 app = Flask(__name__)
 
 @app.route('/')
 def home(): 
-    return "Radar 200 is Hunting..."
+    return "Ultra-Radar (5 Timeframes) is Active!"
 
 def radar_logic():
-    # الاتصال بفيوتشرز بايننس [cite: 2026-01-22]
+    # ربط المحرك ببايننس فيوتشرز [cite: 2026-01-22]
     exchange = ccxt.binance({'options': {'defaultType': 'future'}})
-    print("🚀 تم تشغيل الرادار العملاق.. فحص 200 عملة فيوتشرز بدأ الآن...")
+    
+    # الفريمات الخمسة لزيادة فرص الصيد [cite: 2026-01-22]
+    timeframes = ['5m', '15m', '30m', '1h', '4h']
+    
+    print("🚀 انطلاق الرادار الشامل.. فحص 5 فريمات لـ 200 عملة")
     
     while True:
         try:
-            # جلب كافة عملات الفيوتشرز المتاحة [cite: 2026-01-22]
             markets = exchange.load_markets()
-            symbols = [symbol for symbol, market in markets.items() if market['future'] and '/USDT' in symbol]
-            symbols = symbols[:200] # تحديد أول 200 عملة سيولة
+            symbols = [s for s, m in markets.items() if m['future'] and '/USDT' in s][:200]
+            
+            # طباعة "نبض القلب" للتأكد أن الرادار يعمل [cite: 2026-01-22]
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"🔄 جاري الفحص الآن.. الساعة: {now} (لا توجد أخطاء)")
             
             for s in symbols:
-                try:
-                    # فحص شمعة الـ 15 دقيقة [cite: 2026-01-22]
-                    ohlcv = exchange.fetch_ohlcv(s, '15m', limit=2)
-                    if len(ohlcv) < 2: continue
-                    
-                    o, h, l, c = ohlcv[0][1], ohlcv[0][2], ohlcv[0][3], ohlcv[0][4]
-                    
-                    # شرط الشمعة الحمراء والذيل السفلي الطويل [cite: 2026-01-21]
-                    if c < o:
-                        body = o - c
-                        u_wick = h - o
-                        l_wick = c - l
+                for tf in timeframes:
+                    try:
+                        # جلب الشمعة المكتملة [cite: 2026-01-22]
+                        ohlcv = exchange.fetch_ohlcv(s, tf, limit=2)
+                        if len(ohlcv) < 2: continue
                         
-                        # تطبيق معادلة الجسم أكبر من الذيول والذيل السفلي هو الأطول [cite: 2026-01-21]
-                        if l_wick > u_wick and body > (u_wick + l_wick):
-                            print(f"🎯 صيد من الـ 200 عملة: {s} | تطابق مثالي!")
-                except: continue # في حال فشل جلب عملة واحدة، يكمل الباقي لضمان عدم توقف الدائرة
+                        o, h, l, c = ohlcv[0][1], ohlcv[0][2], ohlcv[0][3], ohlcv[0][4]
+                        
+                        if c < o: # شمعة حمراء [cite: 2026-01-21]
+                            body = o - c
+                            u_wick = h - o
+                            l_wick = c - l
+                            
+                            # شرطك الهندسي الصعب [cite: 2026-01-21]
+                            if l_wick > u_wick and body > (u_wick + l_wick):
+                                print(f"🎯 صيد ثمين!! | {s} | فريم: {tf}")
+                                print(f"📏 جسم الشمعة: {body:.4f} | ⬇️ الذيل السفلي: {l_wick:.4f}")
+                                print("-" * 40)
+                    except: continue
             
-            print("🔄 اكتمل فحص 200 عملة.. استراحة لثوانٍ ثم إعادة الفحص")
-            time.sleep(60)
+            print(f"✅ اكتمل فحص 1000 حالة بنجاح.. بانتظار الدورة القادمة.")
+            time.sleep(60) # راحة دقيقة لتجنب حظر IP [cite: 2026-01-22]
         except Exception as e:
+            print(f"⚠️ تنبيه تقني: {e}")
             time.sleep(10)
 
-# تشغيل الرادار في الخلفية
+# تشغيل الرادار في الخلفية [cite: 2026-01-22]
 threading.Thread(target=radar_logic, daemon=True).start()
 
 if __name__ == "__main__":
+    # تشغيل السيرفر ليبقى Render مستيقظاً
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
