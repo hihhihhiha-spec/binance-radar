@@ -1,32 +1,35 @@
-import ccxt, time, threading
+import ccxt, time, threading, os
 from flask import Flask
 
-# إعداد السيرفر ليتوافق مع Render
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Radar Active"
+def home(): return "Radar is Online!"
 
-def radar_logic():
-    # الاتصال بفيوتشرز بايننس حصراً [cite: 2026-01-22]
+def radar():
+    # الاتصال المباشر بفيوتشرز بايننس لضمان دقة الذيول [cite: 2026-01-22]
     exchange = ccxt.binance({'options': {'defaultType': 'future'}})
+    print("✅ تم تشغيل المحرك.. جاري البحث عن الفرص...")
+    
     while True:
         try:
-            # قائمة عملات الفيوتشرز الأساسية
-            for s in ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'AVAX/USDT', 'XRP/USDT']:
+            # سنفحص عملتين فقط للتأكد من سرعة الاستجابة في البداية
+            for s in ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']:
+                print(f"🔍 أفحص الآن: {s}") 
                 ohlcv = exchange.fetch_ohlcv(s, '15m', limit=2)
                 o, h, l, c = ohlcv[0][1], ohlcv[0][2], ohlcv[0][3], ohlcv[0][4]
                 
-                # شرط الشمعة الحمراء والذيل السفلي الأطول [cite: 2026-01-21]
-                if c < o:
+                if c < o: # شمعة حمراء [cite: 2026-01-21]
                     body, u_wick, l_wick = (o - c), (h - o), (c - l)
+                    # شرطك: ذيل سفلي أطول من العلوي + جسم صلب [cite: 2026-01-21]
                     if l_wick > u_wick and body > (u_wick + l_wick):
-                        print(f"🎯 صيد فيوتشرز: {s} | شمعة مثالية")
-            time.sleep(30)
-        except: time.sleep(10)
+                        print(f"🎯 صيد ثمين وجدته لك: {s} | شمعة حمراء بذيول مثالية")
+            time.sleep(10)
+        except Exception as e:
+            print(f"❌ حدث خطأ بسيط: {e}")
+            time.sleep(5)
 
-# تشغيل الرادار في الخلفية
-threading.Thread(target=radar_logic, daemon=True).start()
+threading.Thread(target=radar, daemon=True).start()
 
 if __name__ == "__main__":
-    # استخدام المنفذ الذي يطلبه Render في صورك
-    app.run(host='0.0.0.0', port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
