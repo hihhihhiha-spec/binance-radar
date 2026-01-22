@@ -1,2 +1,1 @@
-ccxt
-flask
+python-3.10
