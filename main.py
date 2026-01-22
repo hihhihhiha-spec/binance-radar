@@ -5,34 +5,30 @@ from flask import Flask
 import threading
 
 app = Flask(__name__)
-# تفعيل أقصى سرعة جلب بيانات
 exchange = ccxt.binance({'enableRateLimit': False}) 
 
 SYMBOLS_LIMIT = 500 
-TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h'] # ركزنا على الفريمات السريعة لتقليل وقت الانتظار
+TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h']
 history = set()
 
 def is_perfect_pattern(c1, c2):
-    # الحفاظ على استراتيجيتك الأصلية بدقة 100%
+    # الحفاظ على استراتيجيتك (الذيل السفلي > العلوي + كسر قاع)
     if c1[4] >= c1[1] or c2[4] >= c2[1]: return False
     upper1, lower1 = (c1[2]-c1[1]), (c1[4]-c1[3])
     upper2, lower2 = (c2[2]-c2[1]), (c2[4]-c2[3])
-    # شرط الذيول السفلية أكبر من العلوية
     if lower1 <= upper1 or lower2 <= upper2: return False
-    # شرط كسر قاع الشمعة السابقة
     if c2[4] < c1[3]: return True
     return False
 
 def scan_markets():
-    now_str = datetime.now().strftime('%H:%M:%S')
-    print(f"🚀 بدأت دورة فحص جديدة لـ {SYMBOLS_LIMIT} عملة.. الساعة: {now_str}")
+    print(f"--- 🚀 انطلاق دورة فحص جديدة ({datetime.now().strftime('%H:%M:%S')}) ---")
     try:
         tickers = exchange.fetch_tickers()
         symbols = [s for s in tickers.keys() if s.endswith('/USDT')][:SYMBOLS_LIMIT]
         
-        for index, symbol in enumerate(symbols):
-            # طباعة اسم العملة فوراً لتعرف أين وصل الرادار الآن
-            print(f"🔍 فحص: {symbol} ({index+1}/{SYMBOLS_LIMIT})", end='\r')
+        for symbol in symbols:
+            # هنا التغيير: سطر جديد لكل عملة لترى الحركة بوضوح
+            print(f"🔍 فحص الآن: {symbol}") 
             
             for tf in TIMEFRAMES:
                 try:
@@ -41,23 +37,20 @@ def scan_markets():
                     if is_perfect_pattern(ohlcv[-3], ohlcv[-2]):
                         alert_id = f"{symbol}_{tf}_{ohlcv[-2][0]}"
                         if alert_id not in history:
-                            # طباعة النتيجة فوراً بسطر منفصل
-                            print(f"\n🎯 صيد ثمين! {symbol} | فريم: {tf} | كسر + ذيل سفلي طويل ✅")
+                            print(f"🎯🎯🎯 صيد ثمين!! {symbol} | فريم: {tf} | كسر محقق ✅")
                             history.add(alert_id)
                 except: continue
-        print(f"\n✅ انتهى فحص الـ 500 عملة بنجاح.")
     except Exception as e:
-        print(f"\n⚠️ تنبيه: {e}")
+        print(f"⚠️ خطأ اتصال: {e}")
 
 def radar_loop():
     while True:
         scan_markets()
-        if len(history) > 1000: history.clear()
         time.sleep(1)
 
 @app.route('/')
 def home():
-    return "<h1>الرادار اللحظي يعمل...</h1>"
+    return "Radar is running..."
 
 if __name__ == "__main__":
     threading.Thread(target=radar_loop, daemon=True).start()
