@@ -1,52 +1,28 @@
-import ccxt
-import time
+import ccxt, time, threading
 from flask import Flask
-import threading
 
-# إعداد سيرفر وهمي لإبقاء الخدمة تعمل على Render
-app = Flask('')
+app = Flask(__name__)
 @app.route('/')
-def home(): return "Radar is Running!"
+def health(): return "OK"
 
-def run_radar():
-    # الاتصال بسوق الفيوتشرز في بايننس
-    exchange = ccxt.binance({'options': {'defaultType': 'future'}})
-    print("🚀 انطلاق رادار الفيوتشرز المطور...")
-    
+def radar():
+    ex = ccxt.binance({'options': {'defaultType': 'future'}}) # سوق الفيوتشرز [cite: 2026-01-22]
     while True:
         try:
-            # جلب كل عملات الفيوتشرز المتاحة مقابل USDT
-            markets = exchange.fetch_markets()
-            symbols = [m['symbol'] for m in markets if m['active'] and m['linear'] and m['quote'] == 'USDT']
-            
-            for tf in ['5m', '15m', '1h', '4h']:
-                print(f"🔍 فحص إطار {tf}...")
-                for sym in symbols:
-                    try:
-                        ohlcv = exchange.fetch_ohlcv(sym, tf, limit=2)
-                        if len(ohlcv) < 2: continue
-                        
-                        # الشمعة السابقة (المكتملة)
-                        o, h, l, c = ohlcv[0][1], ohlcv[0][2], ohlcv[0][3], ohlcv[0][4]
-                        
-                        # 1. شرط اللون: شمعة حمراء
-                        if c < o:
-                            body = o - c
-                            upper_wick = h - o
-                            lower_wick = c - l
-                            
-                            # 2. شرط الذيول: السفلي أطول من العلوي + الجسم أكبر من الذيول
-                            if lower_wick > upper_wick and body > (upper_wick + lower_wick):
-                                print(f"🎯 صيد فيوتشرز: {sym} ({tf}) - ذيل سفلي طويل")
-                    except: continue
-                    time.sleep(0.1) # سرعة الفحص
-            
-            print("💤 انتهاء الدورة. انتظار دقيقة...")
-            time.sleep(60)
-        except Exception as e:
-            print(f"خطأ: {e}")
-            time.sleep(10)
+            # فحص أهم 50 عملة فيوتشرز لسرعة الأداء
+            symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'AVAX/USDT', 'XRP/USDT', 'ADA/USDT'] 
+            for s in symbols:
+                ohlcv = ex.fetch_ohlcv(s, '15m', limit=2)
+                o, h, l, c = ohlcv[0][1], ohlcv[0][2], ohlcv[0][3], ohlcv[0][4]
+                
+                # شرطك: شمعة حمراء + ذيل سفلي أطول من العلوي + جسم صلب [cite: 2026-01-21]
+                if c < o:
+                    body, u_wick, l_wick = (o - c), (h - o), (c - l)
+                    if l_wick > u_wick and body > (u_wick + l_wick):
+                        print(f"🎯 صيد فيوتشرز: {s} | شمعة مثالية")
+            time.sleep(30)
+        except: time.sleep(10)
 
-# تشغيل الرادار في الخلفية
-threading.Thread(target=run_radar).start()
-app.run(host='0.0.0.0', port=10000)
+threading.Thread(target=radar, daemon=True).start()
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=10000)
