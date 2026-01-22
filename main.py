@@ -1,62 +1,80 @@
-import ccxt, time, threading, os
-from flask import Flask
+import ccxt
+import time
 from datetime import datetime
+from flask import Flask
+import threading
 
 app = Flask(__name__)
+exchange = ccxt.binance()
+
+# إعدادات الرادار المتطورة
+SYMBOLS_LIMIT = 300 
+TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '2h', '4h']
+history = set() # ذاكرة منع التكرار
+
+def is_perfect_pattern(c1, c2):
+    # c1 هي الشمعة السابقة، c2 هي الشمعة الحالية
+    # البيانات: [timestamp, open, high, low, close, volume]
+    
+    # 1. التأكد أن الشمعتين حمراء
+    if c1[4] >= c1[1] or c2[4] >= c2[1]: return False
+    
+    # حسابات الشمعة الأولى (c1)
+    body1 = c1[1] - c1[4]
+    upper_wick1 = c1[2] - c1[1]
+    lower_wick1 = c1[4] - c1[3]
+    
+    # حسابات الشمعة الثانية (c2)
+    body2 = c2[1] - c2[4]
+    upper_wick2 = c2[2] - c2[1]
+    lower_wick2 = c2[4] - c2[3]
+
+    # الشرط: الجسم أكبر من الذيول (ممتلئة) والذيل السفلي أطول من العلوي
+    cond_full1 = body1 > (upper_wick1 + lower_wick1) and lower_wick1 > upper_wick1
+    cond_full2 = body2 > (upper_wick2 + lower_wick2) and lower_wick2 > upper_wick2
+    
+    # الشرط الجوهري: الشمعة الثانية تكسر وتغلق تحت ذيل الشمعة الأولى
+    cond_break = c2[4] < c1[3] 
+    
+    if cond_full1 and cond_full2 and cond_break:
+        return True
+    return False
+
+def scan_markets():
+    print(f"🔄 فحص 2100 حالة.. {datetime.now().strftime('%H:%M:%S')}")
+    try:
+        tickers = exchange.fetch_tickers()
+        symbols = [s for s in tickers.keys() if s.endswith('/USDT')][:SYMBOLS_LIMIT]
+        
+        for symbol in symbols:
+            for tf in TIMEFRAMES:
+                try:
+                    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=3)
+                    if len(ohlcv) < 3: continue
+                    
+                    # نأخذ آخر شمعتين مكتملتين
+                    c1, c2 = ohlcv[-3], ohlcv[-2]
+                    
+                    if is_perfect_pattern(c1, c2):
+                        alert_id = f"{symbol}_{tf}_{c2[0]}" # معرف فريد لمنع التكرار
+                        if alert_id not in history:
+                            print(f"🎯 صيد ثمين! {symbol} | فريم: {tf} | كسر وإغلاق هابط")
+                            history.add(alert_id)
+                except: continue
+    except Exception as e:
+        print(f"❌ خطأ: {e}")
+
+def radar_loop():
+    while True:
+        scan_markets()
+        # تنظيف الذاكرة إذا كبرت جداً
+        if len(history) > 1000: history.clear()
+        time.sleep(20) # فحص سريع جداً كل 20 ثانية
 
 @app.route('/')
-def home(): 
-    return "Ultra-Radar (5 Timeframes) is Active!"
-
-def radar_logic():
-    # ربط المحرك ببايننس فيوتشرز [cite: 2026-01-22]
-    exchange = ccxt.binance({'options': {'defaultType': 'future'}})
-    
-    # الفريمات الخمسة لزيادة فرص الصيد [cite: 2026-01-22]
-    timeframes = ['5m', '15m', '30m', '1h', '4h']
-    
-    print("🚀 انطلاق الرادار الشامل.. فحص 5 فريمات لـ 200 عملة")
-    
-    while True:
-        try:
-            markets = exchange.load_markets()
-            symbols = [s for s, m in markets.items() if m['future'] and '/USDT' in s][:200]
-            
-            # طباعة "نبض القلب" للتأكد أن الرادار يعمل [cite: 2026-01-22]
-            now = datetime.now().strftime("%H:%M:%S")
-            print(f"🔄 جاري الفحص الآن.. الساعة: {now} (لا توجد أخطاء)")
-            
-            for s in symbols:
-                for tf in timeframes:
-                    try:
-                        # جلب الشمعة المكتملة [cite: 2026-01-22]
-                        ohlcv = exchange.fetch_ohlcv(s, tf, limit=2)
-                        if len(ohlcv) < 2: continue
-                        
-                        o, h, l, c = ohlcv[0][1], ohlcv[0][2], ohlcv[0][3], ohlcv[0][4]
-                        
-                        if c < o: # شمعة حمراء [cite: 2026-01-21]
-                            body = o - c
-                            u_wick = h - o
-                            l_wick = c - l
-                            
-                            # شرطك الهندسي الصعب [cite: 2026-01-21]
-                            if l_wick > u_wick and body > (u_wick + l_wick):
-                                print(f"🎯 صيد ثمين!! | {s} | فريم: {tf}")
-                                print(f"📏 جسم الشمعة: {body:.4f} | ⬇️ الذيل السفلي: {l_wick:.4f}")
-                                print("-" * 40)
-                    except: continue
-            
-            print(f"✅ اكتمل فحص 1000 حالة بنجاح.. بانتظار الدورة القادمة.")
-            time.sleep(60) # راحة دقيقة لتجنب حظر IP [cite: 2026-01-22]
-        except Exception as e:
-            print(f"⚠️ تنبيه تقني: {e}")
-            time.sleep(10)
-
-# تشغيل الرادار في الخلفية [cite: 2026-01-22]
-threading.Thread(target=radar_logic, daemon=True).start()
+def home():
+    return "<h1>رادار الكسر المزدوج يعمل بـ 300 عملة...</h1>"
 
 if __name__ == "__main__":
-    # تشغيل السيرفر ليبقى Render مستيقظاً
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    threading.Thread(target=radar_loop, daemon=True).start()
+    app.run(host='0.0.0.0', port=10000)
