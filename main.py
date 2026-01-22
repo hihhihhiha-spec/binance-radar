@@ -1,79 +1,89 @@
 import ccxt
 import time
 from datetime import datetime
-from flask import Flask
-import threading
 
-app = Flask(__name__)
-# تفعيل الحد من الطلبات لتجنب الحظر من بايننس
-exchange = ccxt.binance({'enableRateLimit': True}) 
+# إعداد الاتصال ببينانس فيوتشرز
+exchange = ccxt.binance({
+    'options': {'defaultType': 'future'},
+    'enableRateLimit': True
+})
 
-LIMIT = 250  # عدد مثالي للسيرفر المجاني لضمان عدم التوقف
-TIMEFRAMES = ['5m', '15m', '1h', '4h']
-history = set()
+# --- قائمة الـ 300 عملة مكتوبة يدوياً لسرعة التشغيل واستقراره ---
+MY_SYMBOLS = [
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
+    'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
+    'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT', 'HBAR/USDT', 'ALGO/USDT', 'FIL/USDT', 'ICP/USDT', 'GRT/USDT', 'STX/USDT',
+    'INJ/USDT', 'RNDR/USDT', 'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'THETA/USDT', 'EGLD/USDT', 'AAVE/USDT', 'UNI/USDT',
+    'SUSHI/USDT', 'DYDX/USDT', 'CRV/USDT', 'MKR/USDT', 'LDO/USDT', 'PENDLE/USDT', 'ENS/USDT', 'ID/USDT', 'MAV/USDT', 'EDU/USDT',
+    'GALA/USDT', 'ORDI/USDT', '1000SATS/USDT', 'BEAMX/USDT', 'PYTH/USDT', 'JUP/USDT', 'STRK/USDT', 'DYM/USDT', 'MANTA/USDT', 'ALT/USDT',
+    'ZETA/USDT', 'PIXEL/USDT', 'RONIN/USDT', 'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'IMX/USDT', 'FLOW/USDT', 'CHZ/USDT', 'ENJ/USDT',
+    'BEAM/USDT', 'YGG/USDT', 'ILV/USDT', 'MAGIC/USDT', 'RENDER/USDT', 'RUNE/USDT', 'KAS/USDT', 'TWT/USDT', 'GAS/USDT', 'NEO/USDT',
+    'QTUM/USDT', 'VET/USDT', 'EGLD/USDT', 'CFX/USDT', 'KAVA/USDT', 'TOMO/USDT', 'IOTA/USDT', 'ZIL/USDT', 'ONT/USDT', 'BAT/USDT',
+    # ملاحظة: القائمة طويلة جداً، عند تشغيل الكود لأول مرة سيقوم تلقائياً 
+    # بإكمال أي نقص حتى يصل لـ 300 عملة لضمان شمولية السوق
+]
 
-def is_perfect_pattern(c1, c2):
-    # c1: السابقة | c2: الحالية
-    # التأكد أن الشموع حمراء
-    if c1[4] >= c1[1] or c2[4] >= c2[1]: return False
-    
-    # حساب الذيول
-    upper1, lower1 = (c1[2]-c1[1]), (c1[4]-c1[3])
-    upper2, lower2 = (c2[2]-c2[1]), (c2[4]-c2[3])
+# كود تكميلي لضمان وصول القائمة لـ 300 عملة (يُنفذ مرة واحدة عند التشغيل)
+try:
+    markets = exchange.load_markets()
+    all_f = [s for s in markets if '/USDT' in s and ':' not in s]
+    for s in all_f:
+        if s not in MY_SYMBOLS and len(MY_SYMBOLS) < 300:
+            MY_SYMBOLS.append(s)
+except:
+    pass
 
-    # شرطك: الذيل السفلي أطول من العلوي
-    if lower1 <= upper1 or lower2 <= upper2: return False
-    
-    # الشرط الحاسم: الإغلاق تحت "قاع" (ذيل) الشمعة السابقة
-    if c2[4] < c1[3]: 
-        return True
-    return False
+# الفريمات المطلوبة
+TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
 
-def scan_markets():
+def check_pattern(symbol, tf):
     try:
-        print(f"\n--- 🔄 تبدأ الآن دورة فحص جديدة: {datetime.now().strftime('%H:%M:%S')} ---")
-        tickers = exchange.fetch_tickers()
-        # اختيار أفضل العملات من حيث السيولة لتجنب العملات "الوهمية"
-        symbols = [s for s in tickers.keys() if s.endswith('/USDT')]
-        symbols = symbols[:LIMIT]
+        # جلب آخر 3 شموع
+        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=3)
+        if len(bars) < 3: return False
         
-        for index, symbol in enumerate(symbols):
-            # طباعة التقدم كل 25 عملة لضمان استمرار تدفق السجلات
-            if index % 25 == 0:
-                print(f"📡 الرادار يمسح حالياً: {symbol} ({index}/{LIMIT})")
+        # الشمعة المكتملة الأولى والثانية
+        c1, c2 = bars[-3], bars[-2]
+        o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
+        o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
+
+        # شرط الشموع الحمراء
+        if cl1 < o1 and cl2 < o2:
+            body2 = abs(o2 - cl2)
+            upper_tail2 = h2 - max(o2, cl2)
+            lower_tail2 = min(o2, cl2) - l2
+            
+            # شرط الجسم أكبر من الذيول + كسر ذيل الشمعة السابقة
+            if body2 > upper_tail2 and body2 > lower_tail2:
+                if l2 < l1:
+                    return True
+        return False
+    except:
+        return False
+
+print(f"✅ الرادار جاهز. العملات المستهدفة: {len(MY_SYMBOLS)}")
+print(f"الفريمات: {TIMEFRAMES}")
+
+while True:
+    try:
+        now = datetime.now().strftime('%H:%M:%S')
+        print(f"\n--- دورة فحص جديدة: {now} ---")
+        
+        total = len(MY_SYMBOLS)
+        for index, symbol in enumerate(MY_SYMBOLS, 1):
+            # عداد حي لترى أن الرادار يفحص الآن
+            print(f"\r🔍 جاري فحص ({index}/{total}): {symbol}...", end="", flush=True)
             
             for tf in TIMEFRAMES:
-                try:
-                    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=3)
-                    if len(ohlcv) < 3: continue
-                    
-                    # الفحص بين الشمعة المكتملة (قبل الأخيرة) والتي قبلها
-                    if is_perfect_pattern(ohlcv[-3], ohlcv[-2]):
-                        alert_id = f"{symbol}_{tf}_{ohlcv[-2][0]}"
-                        if alert_id not in history:
-                            print(f"\n🎯🎯 صيد ثمين: {symbol} | الفريم: {tf}")
-                            print(f"📉 الشرط: إغلاق {ohlcv[-2][4]} تحت ذيل {ohlcv[-3][3]}")
-                            history.add(alert_id)
-                except: continue
+                if check_pattern(symbol, tf):
+                    print(f"\n🎯 [فرصة] {symbol} | فريم: {tf}")
             
-            # راحة مجهرية بين كل عملة لمنع استهلاك المعالج 100%
-            time.sleep(0.05) 
+            # تأخير بسيط لمنع الحظر
+            time.sleep(0.02)
             
+        print(f"\n✅ انتهى الفحص الشامل. سأعيد الكرة بعد دقيقتين...")
+        time.sleep(120)
+        
     except Exception as e:
-        print(f"⚠️ تنبيه مؤقت: {e}")
-
-def radar_loop():
-    while True:
-        scan_markets()
-        print("😴 دورة انتهت. استراحة 20 ثانية لتبريد السيرفر...")
-        time.sleep(20) # أهم سطر لمنع Render من إيقاف الكود
-
-@app.route('/')
-def home():
-    return f"Radar Status: ACTIVE | Symbols: {LIMIT} | Time: {datetime.now()}"
-
-if __name__ == "__main__":
-    # تشغيل الرادار في خيط منفصل
-    threading.Thread(target=radar_loop, daemon=True).start()
-    # تشغيل Flask
-    app.run(host='0.0.0.0', port=10000)
+        print(f"\n❌ خطأ تقني: {e}")
+        time.sleep(60)
