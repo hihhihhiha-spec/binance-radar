@@ -1,8 +1,10 @@
-import ccxt
-import time
+import asyncio
+import json
+import websockets
 import os
 import sys
 import threading
+import requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -36,95 +38,82 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات باينانس ---
-exchange = ccxt.binance({
-    'options': {'defaultType': 'future'},
-    'enableRateLimit': True,
-    'timeout': 15000
-})
-
-TIMEFRAMES = ['5m', '15m', '1h']
-alerted_candles = set()
-
-# --- 3. جلب أعلى 100 عملة سيولة تلقائياً ---
-def fetch_top_100_symbols():
+# --- 2. جلب أعلى 50 عملة سيولة (طلب واحد فقط مرة كل دورة) ---
+def get_top_symbols(limit=50):
     try:
-        tickers = exchange.fetch_tickers()
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        res = requests.get(url, timeout=10).json()
         usdt_pairs = [
-            (symbol, data['quoteVolume']) 
-            for symbol, data in tickers.items() 
-            if symbol.endswith('/USDT') and data.get('quoteVolume') is not None
+            item for item in res 
+            if item['symbol'].endswith('USDT')
         ]
-        # ترتيب العملات حسب حجم التداول (السيولة) من الأعلى للأقل
-        usdt_pairs.sort(key=lambda x: x[1], reverse=True)
-        top_100 = [item[0] for item in usdt_pairs[:100]]
-        print(f"✅ تم تجديد قائمة أعلى 100 عملة سيولة بنجاح.", flush=True)
-        return top_100
+        usdt_pairs.sort(key=lambda x: float(x['quoteVolume']), reverse=True)
+        symbols = [item['symbol'].lower() for item in usdt_pairs[:limit]]
+        print(f"✅ تم اختيار أعلى {len(symbols)} عملة سيولة.", flush=True)
+        return symbols
     except Exception as e:
-        print(f"⚠️ خطأ أثناء جلب قائمة السيولة: {e}", flush=True)
+        print(f"⚠️ يتعذر جلب قائمة السيولة (قد تكون ما زلت محظوراً مؤقتاً): {e}", flush=True)
         return []
 
-# --- 4. فحص الشمعة الحمراء الحية ---
-def check_live_red_candle(symbol, tf):
-    try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=2)
-        if not bars:
-            return False, 0
+# سجل منع التكرار
+alerted_candles = set()
 
-        current_candle = bars[-1]
-        candle_timestamp = current_candle[0]
-        open_price = current_candle[1]
-        close_price = current_candle[4]
+# --- 3. الاستماع البث الحي عبر WebSockets ---
+async def binance_websocket_radar():
+    symbols = get_top_symbols(limit=50)
+    if not symbols:
+        print("⏳ انتظار دقيقتين لفك حظر الـ IP من باينانس...", flush=True)
+        await asyncio.sleep(120)
+        return
 
-        # فحص إن كانت الشمعة الحية حمراء
-        if close_price < open_price:
-            return True, candle_timestamp
+    # بناء رابط البث المباشر للشمعات (5m و 15m)
+    streams = []
+    for s in symbols:
+        streams.append(f"{s}@kline_5m")
+        streams.append(f"{s}@kline_15m")
+    
+    stream_url = f"wss://fstream.binance.com/stream?streams={'/'.join(streams)}"
+    
+    print("🚀 اتصال بـ WebSocket الخاص ببينانس... لا يوجد طلبات HTTP تسبب حظر!", flush=True)
 
-        return False, 0
-    except ccxt.RateLimitExceeded:
-        print("⚠️ تجاوز حد الطلبات، انتظار مؤقت...", flush=True)
-        time.sleep(5)
-        return False, 0
-    except Exception:
-        return False, 0
-
-print(f"🚀 بدء الرادار المباشر لأعلى 100 عملة سيولة...", flush=True)
-
-active_symbols = []
-
-while True:
-    try:
-        # تجديد القائمة في بداية كل دورة أو عند فراغها
-        if not active_symbols:
-            active_symbols = fetch_top_100_symbols()
-            if not active_symbols:
-                time.sleep(15)
-                continue
-
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] بدء دورة الفحص لـ {len(active_symbols)} عملة...", flush=True)
-
-        for index, symbol in enumerate(active_symbols, 1):
-            for tf in TIMEFRAMES:
-                is_red, c_time = check_live_red_candle(symbol, tf)
+    async for websocket in websockets.connect(stream_url):
+        try:
+            while True:
+                message = await websocket.recv()
+                data = json.loads(message)
                 
-                if is_red:
-                    alert_id = f"{symbol}_{tf}_{c_time}"
-                    if alert_id not in alerted_candles:
-                        alerted_candles.add(alert_id)
-                        print(f"\n🔥 [تنبيه مباشر] {symbol} | شمعة حمراء حية! | الفريم: {tf} | الوقت: {datetime.now().strftime('%H:%M:%S')}\n", flush=True)
-                        play_radar_sound()
+                if 'data' in data:
+                    kline = data['data']['k']
+                    symbol = kline['s']
+                    tf = kline['i']
+                    open_price = float(kline['o'])
+                    close_price = float(kline['c'])
+                    kline_time = kline['t']
 
-                # تأخير آمن لمنع حظر الـ IP
-                time.sleep(0.06)
+                    # فحص الشمعة الحمراء الحية
+                    if close_price < open_price:
+                        alert_id = f"{symbol}_{tf}_{kline_time}"
+                        if alert_id not in alerted_candles:
+                            alerted_candles.add(alert_id)
+                            print(f"\n🔥 [تنبيه WebSocket حي] {symbol} | شمعة حمراء! | الفريم: {tf} | السعر: {close_price} | الوقت: {datetime.now().strftime('%H:%M:%S')}\n", flush=True)
+                            play_radar_sound()
 
-        # تنظيف سجل التنبيهات إذا زاد حجمه
-        if len(alerted_candles) > 1000:
-            alerted_candles.clear()
+                    # تنظيف السجل
+                    if len(alerted_candles) > 1000:
+                        alerted_candles.clear()
 
-        # تجديد قائمة السيولة تلقائياً في نهاية الدورة
-        active_symbols = fetch_top_100_symbols()
-        time.sleep(5)
+        except websockets.ConnectionClosed:
+            print("⚠️ انقطع الاتصال، إعادة الاتصال تلقائياً...", flush=True)
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"خطأ في الـ WebSocket: {e}", flush=True)
+            await asyncio.sleep(5)
 
-    except Exception as e:
-        print(f"خطأ غير متوقع: {e}", flush=True)
-        time.sleep(10)
+# --- 4. تشغيل المحرك الرئيسي ---
+if __name__ == "__main__":
+    while True:
+        try:
+            asyncio.run(binance_websocket_radar())
+        except Exception as e:
+            print(f"إعادة تشغيل النظام: {e}", flush=True)
+            time.sleep(10)
