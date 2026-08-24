@@ -1,10 +1,10 @@
-import asyncio
-import ccxt.pro as ccxtpro
+import ccxt
+import time
 import os
 import sys
+import threading
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
 
 # --- 0. دالة الصوت التنبيهي ---
 def play_radar_sound():
@@ -13,7 +13,7 @@ def play_radar_sound():
             import winsound
             for _ in range(3):
                 winsound.Beep(2000, 300)
-                await asyncio.sleep(0.05)
+                time.sleep(0.05)
         elif sys.platform == "darwin":
             os.system('say "Alert"')
         else:
@@ -36,16 +36,26 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات WebSocket ---
-exchange = ccxtpro.binance({
+# --- 2. إعدادات باينانس الموزونة ---
+exchange = ccxt.binance({
     'options': {'defaultType': 'future'},
     'enableRateLimit': True,
+    'timeout': 15000
 })
 
 TIMEFRAMES = ['1m', '5m', '15m']
 detected_signals = set()
 
-# --- 3. خوارزمية فحص النمط ---
+def get_active_symbols():
+    try:
+        markets = exchange.load_markets()
+        symbols = [symbol for symbol, data in markets.items() if symbol.endswith('/USDT') and data.get('active', True)]
+        print(f"✅ تم تحميل {len(symbols)} عملة نشطة بنجاح.", flush=True)
+        return symbols
+    except Exception as e:
+        print(f"⚠️ فشل جلب القائمة (قد يكون الـ IP محظوراً مؤقتاً من باينانس): {e}", flush=True)
+        return []
+
 def is_pattern_valid(c1, c2, c3):
     o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
     o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
@@ -69,46 +79,56 @@ def is_pattern_valid(c1, c2, c3):
 
     return is_green3 and is_inside3 and closes_above_mid3
 
-# --- 4. فحص العملة عبر WebSocket ---
-async def watch_symbol_tf(symbol, tf):
-    while True:
-        try:
-            bars = await exchange.watch_ohlcv(symbol, timeframe=tf, limit=4)
-            if not bars or len(bars) < 4:
+def scan_market(symbols):
+    total = len(symbols)
+    for index, symbol in enumerate(symbols, 1):
+        if index % 20 == 0 or index == total:
+            print(f"🔍 فحص العملة [{index}/{total}]...", flush=True)
+
+        for tf in TIMEFRAMES:
+            try:
+                bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=4)
+                if not bars or len(bars) < 4:
+                    continue
+
+                c1, c2, c3 = bars[-4], bars[-3], bars[-2]
+                candle_time = c3[0]
+
+                if is_pattern_valid(c1, c2, c3):
+                    signal_key = f"{symbol}_{tf}_{candle_time}"
+                    if signal_key not in detected_signals:
+                        detected_signals.add(signal_key)
+                        print(f"\n🎯🎯🎯 [تم صيد النمط] {symbol} | الفريم: {tf} 🎯🎯🎯\n", flush=True)
+                        play_radar_sound()
+
+                # تأخير آمن بين كل طلب لتفادي حظر الـ IP
+                time.sleep(0.12)
+
+            except ccxt.RateLimitExceeded:
+                print("⚠️ اقتراب من حد الطلبات! توقف مؤقت لمدة 15 ثانية...", flush=True)
+                time.sleep(15)
+            except Exception:
                 continue
 
-            c1, c2, c3 = bars[-4], bars[-3], bars[-2]
-            candle_time = c3[0]
+print("🚀 بدء تشغيل الرادار المستقر...", flush=True)
 
-            if is_pattern_valid(c1, c2, c3):
-                signal_key = f"{symbol}_{tf}_{candle_time}"
-                if signal_key not in detected_signals:
-                    detected_signals.add(signal_key)
-                    print(f"\n🎯🎯🎯 [صيد جديد عبر WebSocket] {symbol} | الفريم: {tf} 🎯🎯🎯\n", flush=True)
-                    play_radar_sound()
-        except Exception as e:
-            await asyncio.sleep(5)
-
-async def main():
-    print("🔄 جاري تحميل العملات وبدء شبكة WebSockets الخفيفة...", flush=True)
+symbols_list = []
+while True:
     try:
-        markets = await exchange.load_markets()
-        symbols = [symbol for symbol, data in markets.items() if symbol.endswith('/USDT') and data.get('active', True)]
-        print(f"✅ تم ربط {len(symbols)} عملة بقناة البث الحي المستمر!", flush=True)
+        if not symbols_list:
+            symbols_list = get_active_symbols()
+            if not symbols_list:
+                print("⏳ انتظار 30 ثانية قبل إعادة محاولة جلب العملات...", flush=True)
+                time.sleep(30)
+                continue
+
+        start_time = time.time()
+        scan_market(symbols_list)
+        elapsed = round(time.time() - start_time, 1)
+
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] اكتملت دورة الفحص في {elapsed} ثانية. إراحة 10 ثوانٍ...", flush=True)
+        time.sleep(10)
+
     except Exception as e:
-        print(f"⚠️ انتظر انتهاء حظر باينانس المؤقت (IP Ban): {e}", flush=True)
-        return
-
-    tasks = []
-    # اختيار أهم العملات للتركيز على استهلاك البيانات بدون حظر
-    for symbol in symbols[:150]:
-        for tf in TIMEFRAMES:
-            tasks.append(watch_symbol_tf(symbol, tf))
-
-    await asyncio.gather(*tasks)
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+        print(f"خطأ غير متوقع: {e}", flush=True)
+        time.sleep(15)
