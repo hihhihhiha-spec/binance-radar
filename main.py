@@ -36,22 +36,23 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات باينانس وشبك العقود الآجلة ---
+# --- 2. إعدادات باينانس المنهجية ---
 exchange = ccxt.binance({
     'options': {'defaultType': 'future'},
-    'enableRateLimit': True,
-    'timeout': 10000
+    'enableRateLimit': True, # تفعيل الحماية الداخلية
+    'timeout': 20000
 })
 
-print("🔄 جاري تحميل قائمة جميع أزواج العقود الآجلة المتاحة على باينانس...", flush=True)
-try:
-    markets = exchange.load_markets()
-    # جلب جميع الأزواج الشغالة المقترنة بـ USDT
-    MY_SYMBOLS = [symbol for symbol, data in markets.items() if symbol.endswith('/USDT') and data.get('active', True)]
-    print(f"✅ تم تحميل {len(MY_SYMBOLS)} عملة شغالين ونشطين بنجاح!", flush=True)
-except Exception as e:
-    print(f"⚠️ فشل الجلب الآلي، استخدام القائمة الاحتياطية: {e}", flush=True)
-    MY_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'PEPE/USDT', 'WIF/USDT']
+def get_active_symbols():
+    """جلب الأزواج النشطة بطريقة آمنة"""
+    try:
+        markets = exchange.load_markets()
+        symbols = [symbol for symbol, data in markets.items() if symbol.endswith('/USDT') and data.get('active', True)]
+        print(f"✅ تم تحميل {len(symbols)} عملة نشطة من باينانس.", flush=True)
+        return symbols
+    except Exception as e:
+        print(f"⚠️ يتعذر جلب القائمة الآلية الآن (قد يكون الـ IP محظوراً مؤقتاً). الانتظار قليلاً...", flush=True)
+        return []
 
 TIMEFRAMES = ['1m', '5m', '15m']
 detected_signals = set()
@@ -84,12 +85,11 @@ def is_pattern_valid(c1, c2, c3):
 
     return is_green3 and is_inside3 and closes_above_mid3
 
-def scan_market():
-    total = len(MY_SYMBOLS)
-    for index, symbol in enumerate(MY_SYMBOLS, 1):
-        # طباعة حالة الفحص المستمرة لتأكيد العمل
-        if index % 20 == 0 or index == total:
-            print(f"🔍 جاري فحص: [{index}/{total}] عملة...", flush=True)
+def scan_market(symbols):
+    total = len(symbols)
+    for index, symbol in enumerate(symbols, 1):
+        if index % 25 == 0 or index == total:
+            print(f"🔍 تقدم الفحص: [{index}/{total}] عملة...", flush=True)
 
         for tf in TIMEFRAMES:
             try:
@@ -107,19 +107,34 @@ def scan_market():
                         print(f"\n🎯🎯🎯 [تم صيد نمط 3 شمعات] {symbol} | الفريم: {tf} 🎯🎯🎯\n", flush=True)
                         play_radar_sound()
 
-                time.sleep(0.02)
+                # تأخير 0.1 ثانية لحماية حقيقية للـ IP
+                time.sleep(0.1)
+
+            except ccxt.RateLimitExceeded:
+                print("⚠️ تحذير: اقتراب من حد الطلبات! إيقاف مؤقت لمدة 30 ثانية لتفادي Ban...", flush=True)
+                time.sleep(30)
             except Exception:
                 continue
 
-print("🚀 بدأ الرادار الفحص المباشر والسريع...", flush=True)
+print("🚀 بدء تشغيل الرادار الآمن...", flush=True)
 
+symbols_list = []
 while True:
     try:
+        # إعادة جلب الأزواج إذا كانت القائمة فارغة
+        if not symbols_list:
+            symbols_list = get_active_symbols()
+            if not symbols_list:
+                time.sleep(60) # انتظر دقيقة إذا كان الـ IP محظوراً حالياً ليرفع الحظر
+                continue
+
         start_time = time.time()
-        scan_market()
+        scan_market(symbols_list)
         elapsed = round(time.time() - start_time, 1)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] اكتمل فحص {len(MY_SYMBOLS)} عملة في {elapsed} ثانية. إعادة...", flush=True)
-        time.sleep(2)
+        
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] اكتمل الفحص في {elapsed} ثانية. إراحة 10 ثوانٍ...", flush=True)
+        time.sleep(10)
+
     except Exception as e:
-        print(f"Error: {e}", flush=True)
-        time.sleep(5)
+        print(f"خطأ رئيسي: {e}", flush=True)
+        time.sleep(15)
