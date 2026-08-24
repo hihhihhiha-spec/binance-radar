@@ -4,22 +4,10 @@ import websockets
 import os
 import sys
 import threading
-import requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- 0. دالة الصوت ---
-def play_radar_sound():
-    try:
-        if sys.platform == "win32":
-            import winsound
-            winsound.Beep(2000, 300)
-        else:
-            print('\a', flush=True)
-    except Exception:
-        pass
-
-# --- 1. خادم Render ---
+# --- خادم Render يمنع توقف السكربت ---
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -34,20 +22,11 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. جلب قائمة العملات (20 عملة فقط لضمان عمل الرابط) ---
-SYMBOLS = [
-    "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", 
-    "adausdt", "avaxusdt", "dogeusdt", "linkusdt", "nearusdt",
-    "maticusdt", "opusdt", "arbusdt", "shibusdt", "pepeusdt",
-    "wifusdt", "bonkusdt", "flokiusdt", "suiusdt", "aptusdt"
-]
-
+# قائمة أسرع 10 عملات سيولة للتجربة المباشرة
+SYMBOLS = ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "dogeusdt", "pepeusdt", "wifusdt", "nearusdt", "suiusdt"]
 TIMEFRAMES = ["5m", "15m"]
-alerted_candles = set()
 
-# --- 3. تشغيل الـ WebSocket ---
 async def start_radar():
-    # بناء البث
     streams = []
     for s in SYMBOLS:
         for tf in TIMEFRAMES:
@@ -55,10 +34,10 @@ async def start_radar():
     
     url = f"wss://fstream.binance.com/stream?streams={'/'.join(streams)}"
     
-    print("⏳ جاري الاتصال بـ باينانس...", flush=True)
+    print("⏳ جاري الاتصال بالسيرفر...", flush=True)
 
     async with websockets.connect(url) as ws:
-        print("✅ تم الاتصال بنجاح! الرادار يعمل الآن ويستقبل البيانات حياً...", flush=True)
+        print("✅ تم الاتصال! البيانات ستبدأ بالتدفق فوراً أدناه:\n", flush=True)
         
         while True:
             msg = await ws.recv()
@@ -70,22 +49,15 @@ async def start_radar():
                 tf = k['i']
                 open_p = float(k['o'])
                 close_p = float(k['c'])
-                k_time = k['t']
-
-                # طباعة نقطة للتأكد من وصول البيانات
-                # إذا كانت الشمعة حمراء
+                
+                # تحديث مستمر حي أمامك:
                 if close_p < open_p:
-                    alert_id = f"{symbol}_{tf}_{k_time}"
-                    if alert_id not in alerted_candles:
-                        alerted_candles.add(alert_id)
-                        print(f"\n🚨 [شمعة حمراء] {symbol} | فريم: {tf} | الإغلاق الحالي: {close_p} | الوقت: {datetime.now().strftime('%H:%M:%S')}\n", flush=True)
-                        play_radar_sound()
-
-                if len(alerted_candles) > 500:
-                    alerted_candles.clear()
+                    print(f"🔴 [شمعة حمراء] {symbol:<10} | فريم: {tf:<3} | الافتتاح: {open_p} | الإغلاق: {close_p}", flush=True)
+                else:
+                    print(f"🟢 [شمعة خضراء] {symbol:<10} | فريم: {tf:<3} | الافتتاح: {open_p} | الإغلاق: {close_p}", flush=True)
 
 if __name__ == "__main__":
     try:
         asyncio.run(start_radar())
     except Exception as e:
-        print(f"❌ حدث خطأ: {e}", flush=True)
+        print(f"❌ خطأ في الاتصال: {e}", flush=True)
