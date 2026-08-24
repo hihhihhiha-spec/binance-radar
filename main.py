@@ -17,7 +17,7 @@ def play_radar_sound():
         elif sys.platform == "darwin":
             os.system('say "Alert"')
         else:
-            print('\a', flush=True)  # صوت Terminal Bell
+            print('\a', flush=True)
     except Exception:
         print('\a', flush=True)
 
@@ -36,45 +36,24 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات باينانس ---
+# --- 2. إعدادات باينانس وشبك العقود الآجلة ---
 exchange = ccxt.binance({
     'options': {'defaultType': 'future'},
     'enableRateLimit': True,
-    'timeout': 30000
+    'timeout': 10000
 })
 
-# --- 3. قائمة الـ 300 عملة كاملة ---
-MY_SYMBOLS = [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
-    'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
-    'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT', 'HBAR/USDT', 'ALGO/USDT', 'FIL/USDT', 'ICP/USDT', 'GRT/USDT', 'STX/USDT',
-    'INJ/USDT', 'RNDR/USDT', 'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'THETA/USDT', 'EGLD/USDT', 'AAVE/USDT', 'UNI/USDT',
-    'SUSHI/USDT', 'DYDX/USDT', 'CRV/USDT', 'MKR/USDT', 'LDO/USDT', 'PENDLE/USDT', 'ENS/USDT', 'ID/USDT', 'MAV/USDT', 'EDU/USDT',
-    'GALA/USDT', 'ORDI/USDT', '1000SATS/USDT', 'BEAMX/USDT', 'PYTH/USDT', 'JUP/USDT', 'STRK/USDT', 'DYM/USDT', 'MANTA/USDT', 'ALT/USDT',
-    'ZETA/USDT', 'PIXEL/USDT', 'RONIN/USDT', 'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'IMX/USDT', 'FLOW/USDT', 'CHZ/USDT', 'ENJ/USDT',
-    'YGG/USDT', 'ILV/USDT', 'MAGIC/USDT', 'RUNE/USDT', 'KAS/USDT', 'TWT/USDT', 'GAS/USDT', 'NEO/USDT', 'QTUM/USDT', 'VET/USDT',
-    'CFX/USDT', 'KAVA/USDT', 'IOTA/USDT', 'ZIL/USDT', 'ONT/USDT', 'BAT/USDT', 'MASK/USDT', 'LRC/USDT', 'ANKR/USDT', 'LPT/USDT',
-    'BLUR/USDT', 'JOE/USDT', 'MINA/USDT', 'WOO/USDT', 'ASTR/USDT', 'GLMR/USDT', 'METIS/USDT', 'QNT/USDT', 'GMX/USDT', 'SNX/USDT',
-    '1INCH/USDT', 'ALICE/USDT', 'ALPHA/USDT', 'AMB/USDT', 'APE/USDT', 'API3/USDT', 'AR/USDT', 'ARK/USDT', 'ARKM/USDT', 'ARPA/USDT',
-    'ATA/USDT', 'ATOM/USDT', 'AUCTION/USDT', 'AUDIO/USDT', 'AXL/USDT', 'BAKE/USDT', 'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT',
-    'BIGTIME/USDT', 'BLZ/USDT', 'BNX/USDT', 'BSV/USDT', 'BSW/USDT', 'C98/USDT', 'CAKE/USDT', 'CELO/USDT', 'CELR/USDT', 'COMBO/USDT',
-    'COMP/USDT', 'COTI/USDT', 'CTK/USDT', 'CTSI/USDT', 'CVP/USDT', 'DAR/USDT', 'DASH/USDT', 'DATA/USDT', 'DENT/USDT', 'DGB/USDT',
-    'DOCK/USDT', 'DODO/USDT', 'DUSK/USDT', 'EPX/USDT', 'ERN/USDT', 'ETC/USDT', 'FLM/USDT', 'FRONT/USDT', 'FTM/USDT', 'FXS/USDT',
-    'GAL/USDT', 'GHST/USDT', 'GLM/USDT', 'GMT/USDT', 'GNO/USDT', 'GTC/USDT', 'HARD/USDT', 'HFT/USDT', 'HIGH/USDT', 'HOOK/USDT',
-    'HOT/USDT', 'ICX/USDT', 'IDEX/USDT', 'IOTX/USDT', 'KEY/USDT', 'KNC/USDT', 'KSM/USDT', 'LINA/USDT', 'LOOM/USDT', 'LQTY/USDT',
-    'LSK/USDT', 'LUNC/USDT', 'LUNA/USDT', 'MDT/USDT', 'MOVR/USDT', 'MTL/USDT', 'NKN/USDT', 'NMR/USDT', 'NTRN/USDT', 'NULS/USDT',
-    'OGN/USDT', 'OMG/USDT', 'ONG/USDT', 'OXT/USDT', 'PAXG/USDT', 'PERP/USDT', 'PHB/USDT', 'PIVX/USDT', 'POL/USDT', 'POLS/USDT',
-    'POWR/USDT', 'PROS/USDT', 'PSG/USDT', 'PUNDIX/USDT', 'PYR/USDT', 'QI/USDT', 'QUICK/USDT', 'RAD/USDT', 'RARE/USDT', 'RAY/USDT',
-    'REEF/USDT', 'REI/USDT', 'REN/USDT', 'REQ/USDT', 'RIF/USDT', 'RLC/USDT', 'ROSE/USDT', 'RSR/USDT', 'RSS3/USDT', 'RVN/USDT',
-    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'SPELL/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT',
-    'STPT/USDT', 'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT',
-    'UMA/USDT', 'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT',
-    'WAXP/USDT', 'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT',
-    'XWG/USDT', 'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT',
-    'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
-]
+print("🔄 جاري تحميل قائمة جميع أزواج العقود الآجلة المتاحة على باينانس...", flush=True)
+try:
+    markets = exchange.load_markets()
+    # جلب جميع الأزواج الشغالة المقترنة بـ USDT
+    MY_SYMBOLS = [symbol for symbol, data in markets.items() if symbol.endswith('/USDT') and data.get('active', True)]
+    print(f"✅ تم تحميل {len(MY_SYMBOLS)} عملة شغالين ونشطين بنجاح!", flush=True)
+except Exception as e:
+    print(f"⚠️ فشل الجلب الآلي، استخدام القائمة الاحتياطية: {e}", flush=True)
+    MY_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'PEPE/USDT', 'WIF/USDT']
 
-TIMEFRAMES = ['1m', '5m', '15m', '1h']
+TIMEFRAMES = ['1m', '5m', '15m']
 detected_signals = set()
 
 def is_pattern_valid(c1, c2, c3):
@@ -106,11 +85,16 @@ def is_pattern_valid(c1, c2, c3):
     return is_green3 and is_inside3 and closes_above_mid3
 
 def scan_market():
+    total = len(MY_SYMBOLS)
     for index, symbol in enumerate(MY_SYMBOLS, 1):
+        # طباعة حالة الفحص المستمرة لتأكيد العمل
+        if index % 20 == 0 or index == total:
+            print(f"🔍 جاري فحص: [{index}/{total}] عملة...", flush=True)
+
         for tf in TIMEFRAMES:
             try:
                 bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=4)
-                if len(bars) < 4:
+                if not bars or len(bars) < 4:
                     continue
 
                 c1, c2, c3 = bars[-4], bars[-3], bars[-2]
@@ -120,20 +104,22 @@ def scan_market():
                     signal_key = f"{symbol}_{tf}_{candle_time}"
                     if signal_key not in detected_signals:
                         detected_signals.add(signal_key)
-                        print(f"\n🎯🎯🎯 [صيد نمط 3 شمعات] {symbol} | الفريم: {tf} 🎯🎯🎯\n", flush=True)
+                        print(f"\n🎯🎯🎯 [تم صيد نمط 3 شمعات] {symbol} | الفريم: {tf} 🎯🎯🎯\n", flush=True)
                         play_radar_sound()
 
-                time.sleep(0.05) # تأخير لمنع الحظر مع 300 عملة
+                time.sleep(0.02)
             except Exception:
                 continue
 
-print(f"🚀 بدأ الرادار الفحص على {len(MY_SYMBOLS)} عملة مع نمط الشمعة الثالثة...", flush=True)
+print("🚀 بدأ الرادار الفحص المباشر والسريع...", flush=True)
 
 while True:
     try:
+        start_time = time.time()
         scan_market()
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] اكتملت الدورة. إراحة 5 ثوانٍ...", flush=True)
-        time.sleep(5)
+        elapsed = round(time.time() - start_time, 1)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] اكتمل فحص {len(MY_SYMBOLS)} عملة في {elapsed} ثانية. إعادة...", flush=True)
+        time.sleep(2)
     except Exception as e:
         print(f"Error: {e}", flush=True)
-        time.sleep(10)
+        time.sleep(5)
