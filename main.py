@@ -1,8 +1,22 @@
+import sys
+import os
 import time
-import winsound  # يعمل على أنظمة Windows
 from binance.client import Client
 
-# Client = Client(api_key, api_secret)
+def trigger_radar_sound():
+    """دالة تشغيل الصوت التلقائية المتوافقة مع جميع الأنظمة"""
+    # 1. نظام ويندوز
+    if sys.platform == "win32":
+        import winsound
+        for _ in range(3):
+            winsound.Beep(2000, 300)
+            time.sleep(0.1)
+    # 2. نظام ماك (Mac)
+    elif sys.platform == "darwin":
+        os.system('say "Pattern Detected"')
+    # 3. نظام لينكس (Linux)
+    else:
+        print('\a')  # إرسال نظام التنبيه الصوتي القياسي Terminal Bell
 
 def check_pattern(klines):
     if len(klines) < 4:
@@ -35,14 +49,3 @@ def check_pattern(klines):
 
     return (is_red1 and is_red2 and broken_tail and strong_body2 and 
             is_green3 and is_inside and closes_above_mid)
-
-def trigger_radar_sound():
-    """تشغيل صوت صافرة التنبيه (3 نغمات متتالية)"""
-    for _ in range(3):
-        winsound.Beep(2000, 300)  # تردد 2000 هرتز لمدة 300 ميلي ثانية
-        time.sleep(0.1)
-
-# عند اكتشاف الفرصة في الحلقة التكرارية:
-# if check_pattern(klines):
-#     print(f"🎯 [صيد] تم إيجاد النموذج على الزوج: {symbol}")
-#     trigger_radar_sound()
