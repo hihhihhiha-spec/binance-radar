@@ -21,13 +21,13 @@ def play_radar_sound():
     except Exception:
         print('\a', flush=True)
 
-# --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
+# --- 1. خادم منع توقف السيرفر (Render Keeper) ---
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Radar is Active")
-    def log_message(self, format, *args): return # لتقليل الازدحام في السجلات
+    def log_message(self, format, *args): return
 
 def run_port_server():
     port = int(os.environ.get("PORT", 10000))
@@ -37,82 +37,94 @@ def run_port_server():
 threading.Thread(target=run_port_server, daemon=True).start()
 
 # --- 2. إعدادات باينانس ---
-exchange = ccxt.binance({'options': {'defaultType': 'future'}, 'enableRateLimit': True})
+exchange = ccxt.binance({
+    'options': {'defaultType': 'future'},
+    'enableRateLimit': True,
+    'timeout': 15000
+})
 
-# --- 3. قائمة الـ 300 عملة الخاصة بك ---
-MY_SYMBOLS = [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
-    'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
-    'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT', 'HBAR/USDT', 'ALGO/USDT', 'FIL/USDT', 'ICP/USDT', 'GRT/USDT', 'STX/USDT',
-    'INJ/USDT', 'RNDR/USDT', 'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'THETA/USDT', 'EGLD/USDT', 'AAVE/USDT', 'UNI/USDT',
-    'SUSHI/USDT', 'DYDX/USDT', 'CRV/USDT', 'MKR/USDT', 'LDO/USDT', 'PENDLE/USDT', 'ENS/USDT', 'ID/USDT', 'MAV/USDT', 'EDU/USDT',
-    'GALA/USDT', 'ORDI/USDT', '1000SATS/USDT', 'BEAMX/USDT', 'PYTH/USDT', 'JUP/USDT', 'STRK/USDT', 'DYM/USDT', 'MANTA/USDT', 'ALT/USDT',
-    'ZETA/USDT', 'PIXEL/USDT', 'RONIN/USDT', 'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'IMX/USDT', 'FLOW/USDT', 'CHZ/USDT', 'ENJ/USDT',
-    'YGG/USDT', 'ILV/USDT', 'MAGIC/USDT', 'RUNE/USDT', 'KAS/USDT', 'TWT/USDT', 'GAS/USDT', 'NEO/USDT', 'QTUM/USDT', 'VET/USDT',
-    'CFX/USDT', 'KAVA/USDT', 'IOTA/USDT', 'ZIL/USDT', 'ONT/USDT', 'BAT/USDT', 'MASK/USDT', 'LRC/USDT', 'ANKR/USDT', 'LPT/USDT',
-    'BLUR/USDT', 'JOE/USDT', 'MINA/USDT', 'WOO/USDT', 'ASTR/USDT', 'GLMR/USDT', 'METIS/USDT', 'QNT/USDT', 'GMX/USDT', 'SNX/USDT',
-    '1INCH/USDT', 'ALICE/USDT', 'ALPHA/USDT', 'AMB/USDT', 'APE/USDT', 'API3/USDT', 'AR/USDT', 'ARK/USDT', 'ARKM/USDT', 'ARPA/USDT',
-    'ATA/USDT', 'ATOM/USDT', 'AUCTION/USDT', 'AUDIO/USDT', 'AXL/USDT', 'BAKE/USDT', 'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT',
-    'BIGTIME/USDT', 'BLZ/USDT', 'BNX/USDT', 'BSV/USDT', 'BSW/USDT', 'C98/USDT', 'CAKE/USDT', 'CELO/USDT', 'CELR/USDT', 'COMBO/USDT',
-    'COMP/USDT', 'COTI/USDT', 'CTK/USDT', 'CTSI/USDT', 'CVP/USDT', 'DAR/USDT', 'DASH/USDT', 'DATA/USDT', 'DENT/USDT', 'DGB/USDT',
-    'DOCK/USDT', 'DODO/USDT', 'DUSK/USDT', 'EPX/USDT', 'ERN/USDT', 'ETC/USDT', 'FLM/USDT', 'FRONT/USDT', 'FTM/USDT', 'FXS/USDT',
-    'GAL/USDT', 'GHST/USDT', 'GLM/USDT', 'GMT/USDT', 'GNO/USDT', 'GTC/USDT', 'HARD/USDT', 'HFT/USDT', 'HIGH/USDT', 'HOOK/USDT',
-    'HOT/USDT', 'ICX/USDT', 'IDEX/USDT', 'IOTX/USDT', 'KEY/USDT', 'KNC/USDT', 'KSM/USDT', 'LINA/USDT', 'LOOM/USDT', 'LQTY/USDT',
-    'LSK/USDT', 'LUNC/USDT', 'LUNA/USDT', 'MDT/USDT', 'MOVR/USDT', 'MTL/USDT', 'NKN/USDT', 'NMR/USDT', 'NTRN/USDT', 'NULS/USDT',
-    'OGN/USDT', 'OMG/USDT', 'ONG/USDT', 'OXT/USDT', 'PAXG/USDT', 'PERP/USDT', 'PHB/USDT', 'PIVX/USDT', 'POL/USDT', 'POLS/USDT',
-    'POWR/USDT', 'PROS/USDT', 'PSG/USDT', 'PUNDIX/USDT', 'PYR/USDT', 'QI/USDT', 'QUICK/USDT', 'RAD/USDT', 'RARE/USDT', 'RAY/USDT',
-    'REEF/USDT', 'REI/USDT', 'REN/USDT', 'REQ/USDT', 'RIF/USDT', 'RLC/USDT', 'ROSE/USDT', 'RSR/USDT', 'RSS3/USDT', 'RVN/USDT',
-    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'SPELL/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT',
-    'STPT/USDT', 'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT',
-    'UMA/USDT', 'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT',
-    'WAXP/USDT', 'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT',
-    'XWG/USDT', 'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT',
-    'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
-]
+TIMEFRAMES = ['5m', '15m', '1h']
+alerted_candles = set()
 
-TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
-
-# --- 4. دالة فحص الشمعة الحمراء ---
-def check_logic(symbol, tf):
+# --- 3. جلب أعلى 100 عملة سيولة تلقائياً ---
+def fetch_top_100_symbols():
     try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=3)
-        if not bars or len(bars) < 2:
-            return False
+        tickers = exchange.fetch_tickers()
+        usdt_pairs = [
+            (symbol, data['quoteVolume']) 
+            for symbol, data in tickers.items() 
+            if symbol.endswith('/USDT') and data.get('quoteVolume') is not None
+        ]
+        # ترتيب العملات حسب حجم التداول (السيولة) من الأعلى للأقل
+        usdt_pairs.sort(key=lambda x: x[1], reverse=True)
+        top_100 = [item[0] for item in usdt_pairs[:100]]
+        print(f"✅ تم تجديد قائمة أعلى 100 عملة سيولة بنجاح.", flush=True)
+        return top_100
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء جلب قائمة السيولة: {e}", flush=True)
+        return []
 
-        # الشمعة المكتملة السابقة
-        last_candle = bars[-2]
-        open_price = last_candle[1]
-        close_price = last_candle[4]
+# --- 4. فحص الشمعة الحمراء الحية ---
+def check_live_red_candle(symbol, tf):
+    try:
+        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=2)
+        if not bars:
+            return False, 0
 
-        # فحص إن كانت الشمعة حمراء (الإغلاق أقل من الافتتاح)
+        current_candle = bars[-1]
+        candle_timestamp = current_candle[0]
+        open_price = current_candle[1]
+        close_price = current_candle[4]
+
+        # فحص إن كانت الشمعة الحية حمراء
         if close_price < open_price:
-            return True
+            return True, candle_timestamp
 
-        return False
+        return False, 0
     except ccxt.RateLimitExceeded:
-        print("⚠️ Rate limit reached, waiting...", flush=True)
-        time.sleep(10)
-        return False
+        print("⚠️ تجاوز حد الطلبات، انتظار مؤقت...", flush=True)
+        time.sleep(5)
+        return False, 0
     except Exception:
-        return False
+        return False, 0
 
-print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
+print(f"🚀 بدء الرادار المباشر لأعلى 100 عملة سيولة...", flush=True)
 
-# --- 5. الدورة الرئيسية للفحص ---
+active_symbols = []
+
 while True:
     try:
-        for index, symbol in enumerate(MY_SYMBOLS, 1):
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] ({index}/{len(MY_SYMBOLS)}) Scanning: {symbol}", flush=True)
-            for tf in TIMEFRAMES:
-                if check_logic(symbol, tf):
-                    print(f"🎯 ALERT: {symbol} | RED CANDLE DETECTED | TF: {tf}", flush=True)
-                    play_radar_sound()
-                
-                # تأخير بسيط جداً لحماية الـ IP مع الحفاظ على السرعة
-                time.sleep(0.08)
+        # تجديد القائمة في بداية كل دورة أو عند فراغها
+        if not active_symbols:
+            active_symbols = fetch_top_100_symbols()
+            if not active_symbols:
+                time.sleep(15)
+                continue
 
-        print("--- Cycle Finished. Restarting Now ---", flush=True)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] بدء دورة الفحص لـ {len(active_symbols)} عملة...", flush=True)
+
+        for index, symbol in enumerate(active_symbols, 1):
+            for tf in TIMEFRAMES:
+                is_red, c_time = check_live_red_candle(symbol, tf)
+                
+                if is_red:
+                    alert_id = f"{symbol}_{tf}_{c_time}"
+                    if alert_id not in alerted_candles:
+                        alerted_candles.add(alert_id)
+                        print(f"\n🔥 [تنبيه مباشر] {symbol} | شمعة حمراء حية! | الفريم: {tf} | الوقت: {datetime.now().strftime('%H:%M:%S')}\n", flush=True)
+                        play_radar_sound()
+
+                # تأخير آمن لمنع حظر الـ IP
+                time.sleep(0.06)
+
+        # تنظيف سجل التنبيهات إذا زاد حجمه
+        if len(alerted_candles) > 1000:
+            alerted_candles.clear()
+
+        # تجديد قائمة السيولة تلقائياً في نهاية الدورة
+        active_symbols = fetch_top_100_symbols()
         time.sleep(5)
+
     except Exception as e:
-        print(f"Error: {e}", flush=True)
-        time.sleep(20)
+        print(f"خطأ غير متوقع: {e}", flush=True)
+        time.sleep(10)
