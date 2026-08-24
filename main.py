@@ -1,9 +1,25 @@
 import ccxt
 import time
 import os
+import sys
 import threading
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# --- 0. دالة الصوت التنبيهي ---
+def play_radar_sound():
+    try:
+        if sys.platform == "win32":
+            import winsound
+            for _ in range(3):
+                winsound.Beep(2000, 300)
+                time.sleep(0.05)
+        elif sys.platform == "darwin":
+            os.system('say "Alert"')
+        else:
+            print('\a', flush=True)
+    except Exception:
+        print('\a', flush=True)
 
 # --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
 class DummyServer(BaseHTTPRequestHandler):
@@ -20,10 +36,10 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات بينانس ---
+# --- 2. إعدادات باينانس ---
 exchange = ccxt.binance({'options': {'defaultType': 'future'}, 'enableRateLimit': True})
 
-# --- 3. قائمة الـ 300 عملة (كاملة لضمان استمرار الفحص المرئي) ---
+# --- 3. قائمة الـ 300 عملة الخاصة بك ---
 MY_SYMBOLS = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
     'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
@@ -46,45 +62,54 @@ MY_SYMBOLS = [
     'OGN/USDT', 'OMG/USDT', 'ONG/USDT', 'OXT/USDT', 'PAXG/USDT', 'PERP/USDT', 'PHB/USDT', 'PIVX/USDT', 'POL/USDT', 'POLS/USDT',
     'POWR/USDT', 'PROS/USDT', 'PSG/USDT', 'PUNDIX/USDT', 'PYR/USDT', 'QI/USDT', 'QUICK/USDT', 'RAD/USDT', 'RARE/USDT', 'RAY/USDT',
     'REEF/USDT', 'REI/USDT', 'REN/USDT', 'REQ/USDT', 'RIF/USDT', 'RLC/USDT', 'ROSE/USDT', 'RSR/USDT', 'RSS3/USDT', 'RVN/USDT',
-    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'SPELL/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT',
-    'STPT/USDT', 'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT',
-    'UMA/USDT', 'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT',
-    'WAXP/USDT', 'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT',
-    'XWG/USDT', 'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT',
-    'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
+    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT', 'STPT/USDT',
+    'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT', 'UMA/USDT',
+    'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT', 'WAXP/USDT',
+    'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT', 'XWG/USDT',
+    'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT', 'MYRO/USDT',
+    'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
 ]
 
 TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
 
+# --- 4. تعديل الشرط: شمعة حمراء واحدة فقط بغض النظر عن الشكل ---
 def check_logic(symbol, tf):
     try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=6)
-        if len(bars) < 3: return False
-        for i in range(len(bars) - 2):
-            c1, c2 = bars[i], bars[i+1]
-            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            if cl1 < o1 and cl2 < o2:
-                b1, b2 = abs(o1-cl1), abs(o2-cl2)
-                u1, u2 = (h1-max(o1,cl1)), (h2-max(o2,cl2))
-                lt1, lt2 = (min(o1,cl1)-l1), (min(o2,cl2)-l2)
-                if b1 > (u1+lt1) and b2 > (u2+lt2) and lt1 > u1 and lt2 > u2 and cl2 < l1:
-                    return True
+        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=3)
+        if not bars or len(bars) < 2:
+            return False
+
+        # الشمعة المكتملة السابقة
+        last_candle = bars[-2]
+        open_price = last_candle[1]
+        close_price = last_candle[4]
+
+        # فحص إن كانت الشمعة حمراء (الإغلاق أقل من الافتتاح)
+        if close_price < open_price:
+            return True
+
         return False
-    except: return False
+    except ccxt.RateLimitExceeded:
+        print("⚠️ Rate limit reached, waiting...", flush=True)
+        time.sleep(10)
+        return False
+    except Exceptional:
+        return False
 
 print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.")
 
 while True:
     try:
         for index, symbol in enumerate(MY_SYMBOLS, 1):
-            # طباعة فورية ومستمرة لكل عملة لضمان بقاء الـ Logs نشطة
             print(f"[{datetime.now().strftime('%H:%M:%S')}] ({index}/{len(MY_SYMBOLS)}) Scanning: {symbol}", flush=True)
             for tf in TIMEFRAMES:
                 if check_logic(symbol, tf):
-                    print(f"🎯 ALERT: {symbol} | TF: {tf}", flush=True)
-            time.sleep(0.02) # سرعة الفحص
-        
+                    print(f"🎯 ALERT: {symbol} | RED CANDLE DETECTED | TF: {tf}", flush=True)
+                    play_radar_sound()
+                
+                # تأخير بسيط جداً لحماية الـ IP مع الحفاظ على السرعة
+                time.sleep(0.08)
+
         print("--- Cycle Finished. Restarting Now ---", flush=True)
         time.sleep(5)
     except Exception as e:
