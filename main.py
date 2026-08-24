@@ -7,16 +7,16 @@ import os
 import threading
 from flask import Flask
 
-# 1. إنشاء سيرفر وهمي لمنصة Render لتفادي خطأ No open ports
+# 1. إعداد تطبيق Flask
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Radar is Running 24/7!"
+    return "Binance Radar is Active & Running 24/7!", 200
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+@app.route('/health')
+def health():
+    return "OK", 200
 
 # 2. إعدادات بوت تليجرام
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -24,7 +24,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def send_telegram_alert(message):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ لم يتم ضبط TELEGRAM_TOKEN أو TELEGRAM_CHAT_ID في Secrets/Environment Variables.")
+        print("⚠️ لم يتم ضبط TELEGRAM_TOKEN أو TELEGRAM_CHAT_ID في Environment Variables.")
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -65,6 +65,10 @@ def check_pattern(df):
     return is_green and closes_at_half
 
 def run_radar():
+    """دالة فحص الرادار في الخلفية"""
+    # انتظار ثانيتين لضمان استقرار سيرفر Flask أولاً
+    time.sleep(2)
+    
     exchange = ccxt.binance({
         'enableRateLimit': True,
         'timeout': 15000,
@@ -72,7 +76,7 @@ def run_radar():
     })
 
     timeframes = ['1m', '3m', '5m', '1h']
-    print("🚀 بدء الرادار على Render...")
+    print("🚀 تم بدء تشغيل محرك الرادار بنجاح...")
 
     while True:
         try:
@@ -97,18 +101,24 @@ def run_radar():
                     except ccxt.RateLimitExceeded as e:
                         print(f"🛑 [تجاوز RateLimit]: {e}")
                         time.sleep(10)
-                    except Exception as e:
+                    except Exception:
                         pass
                     
                     time.sleep(0.12)
 
         except Exception as e:
-            print(f"❌ [خطأ عام]: {e}")
+            print(f"❌ [خطأ عام في الرادار]: {e}")
             time.sleep(5)
 
+# 3. نقطة التشغيل الرئيسية
 if __name__ == "__main__":
-    # تشغيل السيرفر الوهمي في خلفية مستقلة (Thread)
-    threading.Thread(target=run_flask, daemon=True).start()
+    # تشغيل الرادار في Thread منفصل في الخلفية
+    radar_thread = threading.Thread(target=run_radar, daemon=True)
+    radar_thread.start()
+
+    # جلب البورت المخصص من Render أو استخدام 10000 كافتراضي
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🌐 جاري تشغيل سيرفر الويب على البورت {port}...")
     
-    # تشغيل الرادار الأساسي
-    run_radar()
+    # تشغيل Flask كسيرفر رئيسي يستجيب لـ Render فوراً
+    app.run(host='0.0.0.0', port=port)
