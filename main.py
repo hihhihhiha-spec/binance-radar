@@ -2,8 +2,22 @@ import ccxt
 import time
 import os
 import threading
+import requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# --- إعدادات تيليجرام (ضع بياناتك هنا) ---
+TELEGRAM_TOKEN = 8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI
+
+CHAT_ID = 6141474899
+
+def send_telegram_message(message):
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Telegram Error: {e}", flush=True)
 
 # --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
 class DummyServer(BaseHTTPRequestHandler):
@@ -11,7 +25,7 @@ class DummyServer(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"Radar is Active")
-    def log_message(self, format, *args): return # لتقليل الازدحام في السجلات
+    def log_message(self, format, *args): return
 
 def run_port_server():
     port = int(os.environ.get("PORT", 10000))
@@ -23,7 +37,7 @@ threading.Thread(target=run_port_server, daemon=True).start()
 # --- 2. إعدادات بينانس ---
 exchange = ccxt.binance({'options': {'defaultType': 'future'}, 'enableRateLimit': True})
 
-# --- 3. قائمة الـ 300 عملة (كاملة لضمان استمرار الفحص المرئي) ---
+# --- 3. قائمة الـ 300 عملة ---
 MY_SYMBOLS = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
     'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
@@ -73,17 +87,19 @@ def check_logic(symbol, tf):
         return False
     except: return False
 
-print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.")
+print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
+send_telegram_message("🚀 تم تشغيل رادار بينانس بنجاح ويعمل الآن على فحص العملات...")
 
 while True:
     try:
         for index, symbol in enumerate(MY_SYMBOLS, 1):
-            # طباعة فورية ومستمرة لكل عملة لضمان بقاء الـ Logs نشطة
             print(f"[{datetime.now().strftime('%H:%M:%S')}] ({index}/{len(MY_SYMBOLS)}) Scanning: {symbol}", flush=True)
             for tf in TIMEFRAMES:
                 if check_logic(symbol, tf):
-                    print(f"🎯 ALERT: {symbol} | TF: {tf}", flush=True)
-            time.sleep(0.02) # سرعة الفحص
+                    alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
+                    send_telegram_message(alert_msg)
+            time.sleep(0.02)
         
         print("--- Cycle Finished. Restarting Now ---", flush=True)
         time.sleep(5)
