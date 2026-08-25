@@ -81,36 +81,40 @@ def check_logic(symbol, tf):
         for i in range(len(bars) - 2):
             c1, c2, c3 = bars[i], bars[i+1], bars[i+2]
             
+            # الشمعة الأولى (التي قبل الحمراء الكبيرة، لونها لا يهم)
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
+            body1 = abs(o1 - cl1)
             
-            is_red_1 = cl1 < o1
+            # الشمعة الثانية (يجب أن تكون حمراء وأكبر حجماً من الشمعة الأولى)
+            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
-            lower_wick2 = min(o2, cl2) - l2
-            cond_candle_2 = (is_red_2 and body2 > 0 and body2 > lower_wick2)
             
+            # الشمعة الثالثة (يجب أن تكون خضراء ممتلئة وداخل نطاق الشمعة الحمراء الثانية)
+            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
-            body2_top = max(o2, cl2)
-            body2_bottom = min(o2, cl2)
-            body3_top = max(o3, cl3)
-            body3_bottom = min(o3, cl3)
+            body3 = abs(o3 - cl3)
             
-            is_inside_body = (is_green_3 and body3_top <= body2_top and body3_bottom >= body2_bottom)
+            # شروط الصرامة الجديدة:
+            # 1. الشمعة الحمراء أكبر من التي قبلها
+            # 2. الشمعة الحمراء تحتوي بداخلها شمعة خضراء ممتلئة (الجسم والديول داخل نطاق الشمعة الحمراء تماماً)
+            is_red_larger = is_red_2 and (body2 > body1)
             
-            if is_red_1 and cond_candle_2 and is_inside_body:
+            # الشمعة الخضراء ممتلئة (جسمها أكبر من الذيول أو واضحة) وداخل حدود الشمعة الحمراء بالكامل (من القمة إلى القاع)
+            is_green_full = is_green_3 and (body3 > (h3 - l3) * 0.4) # ممتلئة الحجم وليست ديولاً فقط
+            is_inside_range = (h3 <= h2 and l3 >= l2)
+            
+            if is_red_larger and is_green_full and is_inside_range:
                 print(f"🎯 MATCH FOUND! {symbol} on timeframe {tf}", flush=True)
                 return True
                 
         return False
     except Exception as e:
-        # الآن سيطبع أي خطأ بوضوح في السجلات لكي نراه فوراً
         print(f"Error checking {symbol} on {tf}: {e}", flush=True)
         return False
 
 print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار مع طباعة الأخطاء وسجلات الفحص بوضوح.")
+send_telegram_message("🚀 تم تشغيل الرادار بالشرط الصارم الجديد مع طباعة الأخطاء وسجلات الفحص بوضوح.")
 
 while True:
     try:
