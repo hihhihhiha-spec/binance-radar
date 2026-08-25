@@ -102,26 +102,26 @@ def check_logic(symbol, tf):
                 
         return False
     except Exception as e:
-        # طباعة أي خطأ صامت يحدث لكي نراه بوضوح في السجلات
         print(f"Error checking {symbol} on {tf}: {e}", flush=True)
         return False
 
-print(f"🚀 Radar Started with Full Debug Logging: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل وضع تتبع الأخطاء والفحص الكامل.")
+print(f"🚀 Radar Started safely: {len(MY_SYMBOLS)} symbols.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار مع حماية الحظر وإبطاء الطلبات لتجنب الضغط على بينانس.")
 
 while True:
     try:
         for index, symbol in enumerate(MY_SYMBOLS, 1):
             for tf in TIMEFRAMES:
-                print(f"Scanning -> {symbol} | TF: {tf}", flush=True)  # يطبع كل عملية فحص لترى أن البوت يتحرك
+                # تم إضافة توقف قصير جداً (0.1 ثانية) بين كل طلب لمنع الحظر نهائياً
+                time.sleep(0.1) 
+                
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
-            time.sleep(0.02)
         
         print("--- Cycle Finished. Restarting Now ---", flush=True)
-        time.sleep(5)
+        time.sleep(10)
     except Exception as e:
         print(f"Main Loop Error: {e}", flush=True)
-        time.sleep(20)
+        time.sleep(30)
