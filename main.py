@@ -1,9 +1,8 @@
-import time
+import asyncio
 import json
 import os
 import threading
-import requests
-import websocket
+import aiohttp
 import pandas as pd
 from datetime import datetime
 from flask import Flask
@@ -12,7 +11,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Futures Radar Active 24/7", 200
+    return "Binance Radar Active 24/7", 200
 
 @app.route('/health')
 def health():
@@ -22,37 +21,20 @@ candle_data = {}
 
 def get_all_futures_symbols():
     try:
-        url = "https://data-api.binance.vision/api/v3/exchangeInfo"
-        req = requests.get(url, timeout=10)
-        if req.status_code == 200:
-            data = req.json()
+        url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
+        import requests
+        res = requests.get(url, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
             symbols = [
                 s['symbol'].lower() for s in data['symbols'] 
-                if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'
+                if s['quoteAsset'] == 'USDT' and s['contractType'] == 'PERPETUAL' and s['status'] == 'TRADING'
             ]
             if len(symbols) > 50:
                 print(f"✅ تم جلب جميع عملات الفيوتشرز: {len(symbols)} عملة!", flush=True)
                 return symbols
-    except Exception:
-        pass
-
-    try:
-        url = "https://api.coingecko.com/api/v3/derivatives/exchanges/binance_futures"
-        req = requests.get(url, timeout=10)
-        if req.status_code == 200:
-            data = req.json()
-            symbols = []
-            for item in data.get('tickers', []):
-                if item.get('target') == 'USDT':
-                    s = item.get('symbol').lower().replace('_', '').replace('-', '')
-                    if s.endswith('usdt'):
-                        symbols.append(s)
-            symbols = list(set(symbols))
-            if len(symbols) > 50:
-                print(f"✅ تم جلب القائمة عبر Coingecko: {len(symbols)} عملة!", flush=True)
-                return symbols
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ خطأ جلب العملات: {e}", flush=True)
 
     return ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt"]
 
@@ -85,7 +67,6 @@ def check_pattern_strict(df):
             return False
 
         is_fully_inside_red = (c3['low'] >= c2['low']) and (c3['high'] <= c2['high'])
-
         return is_fully_inside_red
 
     except Exception:
@@ -124,54 +105,44 @@ def process_kline(kline):
             else:
                 print(f"🔍 [فحص]: {symbol.upper()} ({tf}) - غير متطابق", flush=True)
 
-def on_message(ws, message):
-    try:
-        payload = json.loads(message)
-        if 'data' in payload and 'k' in payload['data']:
-            process_kline(payload['data']['k'])
-        elif 'k' in payload:
-            process_kline(payload['k'])
-    except Exception:
-        pass
-
-def on_error(ws, error):
-    pass
-
-def on_close(ws, close_status_code, close_msg):
-    time.sleep(3)
-
-def run_ws_chunk(streams_chunk):
+async def listen_ws_chunk(session, streams_chunk):
     streams_url = "/".join(streams_chunk)
     url = f"wss://fstream.binance.com/stream?streams={streams_url}"
     
-    ws = websocket.WebSocketApp(
-        url,
-        on_message=on_message,
-        on_error=on_error,
-        on_close=on_close
-    )
-    ws.run_forever(ping_interval=30, ping_timeout=10)
+    while True:
+        try:
+            async with session.ws_connect(url, heartbeat=20) as ws:
+                async for msg in ws:
+                    if msg.type == aiohttp.WSMsgType.TEXT:
+                        payload = json.loads(msg.data)
+                        if 'data' in payload and 'k' in payload['data']:
+                            process_kline(payload['data']['k'])
+                    elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                        break
+        except Exception:
+            await asyncio.sleep(5)
 
-def start_futures_radar():
+async def start_async_radar():
     symbols = get_all_futures_symbols()
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h']
-
     all_streams = [f"{symbol}@kline_{tf}" for symbol in symbols for tf in timeframes]
 
-    print(f"🚀 جاري ربط {len(all_streams)} قناة بث بأمان...", flush=True)
+    print(f"🚀 جاري ربط {len(all_streams)} قناة بث عبر aiohttp Async...", flush=True)
 
-    # تقسيم القنوات إلى 100 فقط لكل اتصال لمنع رفض بينانس للرابط
     chunk_size = 100
-    for i in range(0, len(all_streams), chunk_size):
-        chunk = all_streams[i:i + chunk_size]
-        t = threading.Thread(target=run_ws_chunk, args=(chunk,))
-        t.daemon = True
-        t.start()
-        time.sleep(0.5)
+    chunks = [all_streams[i:i + chunk_size] for i in range(0, len(all_streams), chunk_size)]
 
-    print("✅ تم ربط جميع القنوات بنجاح واستقرار تام!", flush=True)
+    async with aiohttp.ClientSession() as session:
+        tasks = [listen_ws_chunk(session, chunk) for chunk in chunks]
+        print("✅ تم تفعيل الاستماع اللحظي المستقر بنجاح!", flush=True)
+        await asyncio.gather(*tasks)
 
-threading.Thread(target=start_futures_radar, daemon=True).start()
+def run_loop():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(start_async_radar())
+
+threading.Thread(target=run_loop, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
