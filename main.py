@@ -7,22 +7,22 @@ from datetime import datetime
 from flask import Flask
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 
-# 1. سيرفر Flask متوافق مع منصة Render لتفادي أخطاء البورت
+# 1. إنشاء سيرفر Flask لمنصة Render
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Radar (WebSocket) is Live 24/7!", 200
+    return "Binance Radar is Running 24/7!", 200
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-# مخزن البيانات المؤقت للشموع
+# مخزن لحفظ الشموع الأخيرة لكل عملة وفريم
 candle_data = {}
 
 def check_pattern(df):
-    """فحص شرط الشموع المطلوب"""
+    """فحص شروط الشموع المطلوب"""
     try:
         if df is None or len(df) < 3:
             return False
@@ -52,16 +52,21 @@ def check_pattern(df):
         return False
 
 def message_handler(_, message):
-    """معالجة بث بينانس المباشر"""
+    """معالجة الرسائل القادمة من البث المباشر"""
     try:
-        data = json.loads(message)
+        payload = json.loads(message)
         
-        # التعامل مع بيانات الشموع
-        if 'k' in data:
-            kline = data['k']
+        # استخراج البيانات سواء كانت مباشرة أو تغليف Combined Stream
+        kline = None
+        if 'k' in payload:
+            kline = payload['k']
+        elif 'data' in payload and 'k' in payload['data']:
+            kline = payload['data']['k']
+
+        if kline:
             symbol = kline['s']
             tf = kline['i']
-            is_closed = kline['x']  # الفحص عند إغلاق الشمعة
+            is_closed = kline['x']  # الفحص يتم فقط عند إغلاق الشمعة
 
             if is_closed:
                 key = f"{symbol}_{tf}"
@@ -75,12 +80,14 @@ def message_handler(_, message):
                     'close': float(kline['c'])
                 })
 
+                # الاحتفاظ بآخر 5 شموع فقط
                 if len(candle_data[key]) > 5:
                     candle_data[key].pop(0)
 
                 stored_count = len(candle_data[key])
-                print(f"📥 [شمعة مغلقة] {symbol} | فريم {tf} | الإغلاق: {kline['c']} | الشموع المخزنة: {stored_count}/3")
+                print(f"📥 [إغلاق شمعة] | {symbol} | فريم: {tf} | السعر: {kline['c']} | مخزن: {stored_count}/3")
 
+                # بدء الفحص عند توفر 3 شموع مكتملة
                 if stored_count >= 3:
                     df = pd.DataFrame(candle_data[key])
                     if check_pattern(df):
@@ -92,7 +99,7 @@ def message_handler(_, message):
         pass
 
 def start_radar_stream():
-    """الربط المباشر مع Binance WebSockets"""
+    """تشغيل البث المباشر لأهم العملات"""
     symbols = [
         "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", 
         "adausdt", "dogeusdt", "avaxusdt", "dotusdt", "linkusdt"
@@ -104,24 +111,20 @@ def start_radar_stream():
         for tf in timeframes:
             stream_list.append(f"{symbol}@kline_{tf}")
 
-    print("🚀 جاري الاتصال ببث بينانس المباشر بدون حظر IP...")
+    print("🚀 جاري الاتصال ببث بينانس المباشر...")
     
-    while True:
-        try:
-            my_client = SpotWebsocketStreamClient(on_message=message_handler)
-            my_client.subscribe(stream=stream_list)
-            
-            # إبقاء الـ Thread حياً ومستمراً
-            while True:
-                time.sleep(1)
-        except Exception as e:
-            print(f"❌ إعادة الاتصال بالبث: {e}")
-            time.sleep(5)
+    try:
+        # تشغيل عميل بينانس المباشر
+        my_client = SpotWebsocketStreamClient(on_message=message_handler)
+        my_client.subscribe(stream=stream_list)
+        print("✅ تم الاشتراك في جميع الفريمات بنجاح! الرادار يستمع للشموع الآن...")
+    except Exception as e:
+        print(f"❌ خطأ في الاتصال بالبث: {e}")
 
 if __name__ == "__main__":
-    # تشغيل محرك الرادار في الخلفية
+    # تشغيل محرك الرادار في خلفية مستقلا
     threading.Thread(target=start_radar_stream, daemon=True).start()
 
-    # تشغيل السيرفر الرئيسي
+    # تشغيل سيرفر Render الرئيسي
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
