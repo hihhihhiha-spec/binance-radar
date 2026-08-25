@@ -81,12 +81,16 @@ def check_logic(symbol, tf):
         o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
         o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
         
+        # 1. الشمعة الأولى حمراء
         is_red_1 = cl1 < o1
+        
+        # 2. الشمعة الثانية حمراء + جسمها أكبر من ذيلها السفلي العادي
         is_red_2 = cl2 < o2
         body2 = abs(o2 - cl2)
         lower_wick2 = min(o2, cl2) - l2
-        cond_candle_2 = (is_red_2 and body2 > 0 and lower_wick2 >= (body2 * 2))
+        cond_candle_2 = (is_red_2 and body2 > 0 and body2 > lower_wick2)
         
+        # 3. الشمعة الثالثة خضراء + جسمها بالكامل داخل جسم الشمعة الثانية
         is_green_3 = cl3 > o3
         body2_top = max(o2, cl2)
         body2_bottom = min(o2, cl2)
@@ -103,7 +107,7 @@ def check_logic(symbol, tf):
         return False
 
 print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تحديث رادار بينانس وإضافة فريمات 1m و 3m بنجاح!")
+send_telegram_message("🚀 تم تعديل الشرط: الشمعة الثانية أصبح جسمها أكبر من ذيلها السفلي العادي!")
 
 while True:
     try:
