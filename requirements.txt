@@ -1,5 +1,4 @@
 flask
-pandas
-websocket-client
-gunicorn
 requests
+pandas
+aiohttp
