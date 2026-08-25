@@ -7,56 +7,75 @@ from datetime import datetime
 from flask import Flask
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 
-# 1. إنشاء سيرفر Flask لمنصة Render
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Radar (WebSocket) is Active 24/7!", 200
+    return "Binance Precise Radar is Live 24/7!", 200
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-# مخزن لحفظ البيانات المؤقتة
+# مخزن البيانات
 candle_data = {}
 
-def check_pattern(df):
-    """فحص شرط الشموع المطلوبة"""
+def check_pattern_precise(df):
+    """
+    فحص دقيق جداً لشروط الشموع الثلاث:
+    df.iloc[-3] : الشمعة الأولى (المرجعية)
+    df.iloc[-2] : الشمعة الثانية (الحمراء)
+    df.iloc[-1] : الشمعة الثالثة (الخضراء الانعكاسية)
+    """
     try:
         if df is None or len(df) < 3:
             return False
 
-        prev_candle = df.iloc[-3]
-        red_candle = df.iloc[-2]
-        green_candle = df.iloc[-1]
+        c1 = df.iloc[-3] # الشمعة الأولى
+        c2 = df.iloc[-2] # الشمعة الحمراء
+        c3 = df.iloc[-1] # الشمعة الخضراء
 
-        # 1. شمعة حمراء أكبر من التي قبلها وتغلق تحت ذيلها
-        is_red = red_candle['close'] < red_candle['open']
-        red_body = abs(red_candle['close'] - red_candle['open'])
-        prev_body = abs(prev_candle['close'] - prev_candle['open'])
-        
-        is_bigger = red_body > prev_body
-        breaks_lower_tail = red_candle['close'] < prev_candle['low']
-
-        if not (is_red and is_bigger and breaks_lower_tail):
+        # -------------------------------------------------------------
+        # 1. شروط الشمعة الثانية (الحمراء)
+        # -------------------------------------------------------------
+        is_c2_red = c2['close'] < c2['open']
+        if not is_c2_red:
             return False
 
-        # 2. شمعة خضراء تالية تغلق عند نصف الشمعة الحمراء على الأقل
-        is_green = green_candle['close'] > green_candle['open']
-        red_midpoint = red_candle['open'] - (red_body / 2)
-        closes_at_half = green_candle['close'] >= red_midpoint
+        c2_body = abs(c2['open'] - c2['close'])
+        c1_body = abs(c1['open'] - c1['close'])
 
-        return is_green and closes_at_half
+        # أ) جسم الحمراء أكبر من جسم الشمعة التي قبلها
+        is_body_bigger = c2_body > c1_body
+
+        # ب) إغلاق الحمراء يكسر أدنى ذيل (Low) للشمعة الأولى
+        breaks_c1_low = c2['close'] < c1['low']
+
+        if not (is_body_bigger and breaks_c1_low):
+            return False
+
+        # -------------------------------------------------------------
+        # 2. شروط الشمعة الثالثة (الخضراء الانعكاسية)
+        # -------------------------------------------------------------
+        is_c3_green = c3['close'] > c3['open']
+        if not is_c3_green:
+            return False
+
+        # حساب النقطة الوسطى لجسم الشمعة الحمراء بدقة
+        red_body_midpoint = (c2['open'] + c2['close']) / 2.0
+
+        # ج) إغلاق الخضراء يكون أعلى أو يساوي منتصف جسم الشمعة الحمراء
+        closes_above_midpoint = c3['close'] >= red_body_midpoint
+
+        return closes_above_midpoint
+
     except Exception:
         return False
 
 def message_handler(_, message):
-    """معالجة الرسائل القادمة من البث المباشر"""
     try:
         payload = json.loads(message)
         
-        # استخراج الشمعة
         kline = None
         if 'k' in payload:
             kline = payload['k']
@@ -66,13 +85,14 @@ def message_handler(_, message):
         if kline:
             symbol = kline['s']
             tf = kline['i']
-            is_closed = kline['x']  # الفحص عند الإغلاق فقط
+            is_closed = kline['x']  # التأكد 100% أن الشمعة أغلقت وانتهت
 
             if is_closed:
                 key = f"{symbol}_{tf}"
                 if key not in candle_data:
                     candle_data[key] = []
 
+                # إضافة الشمعة المغلقة
                 candle_data[key].append({
                     'open': float(kline['o']),
                     'high': float(kline['h']),
@@ -80,24 +100,29 @@ def message_handler(_, message):
                     'close': float(kline['c'])
                 })
 
+                # الاحتفاظ بأحدث 5 شموع فقط
                 if len(candle_data[key]) > 5:
                     candle_data[key].pop(0)
 
                 stored_count = len(candle_data[key])
-                print(f"📥 [إغلاق شمعة] | {symbol} | فريم: {tf} | السعر: {kline['c']} | مخزن: {stored_count}/3", flush=True)
 
+                # الفحص يبدأ عند وجود 3 شموع مغلقة ومكتملة تماماً
                 if stored_count >= 3:
                     df = pd.DataFrame(candle_data[key])
-                    if check_pattern(df):
+                    
+                    if check_pattern_precise(df):
                         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        print("\n" + "="*60, flush=True)
-                        print(f"🚨 [تم الرصد بنجاح] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
-                        print("="*60 + "\n", flush=True)
+                        print("\n" + "🎯"*30, flush=True)
+                        print(f"🚨 [رصد دقيق مؤكد] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
+                        print(f"   📊 إغلاق الخضراء: {kline['c']} | منتصف الحمراء: {(df.iloc[-2]['open']+df.iloc[-2]['close'])/2.0}", flush=True)
+                        print("🎯"*30 + "\n", flush=True)
+                    else:
+                        print(f"🔍 [فحص شمعة مغلقة]: {symbol} ({tf}) - لم تتطابق الشروط.", flush=True)
+
     except Exception as e:
         pass
 
 def start_radar():
-    """تشغيل البث المباشر"""
     symbols = [
         "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", 
         "adausdt", "dogeusdt", "avaxusdt", "dotusdt", "linkusdt"
@@ -106,18 +131,15 @@ def start_radar():
 
     stream_list = [f"{s}@kline_{tf}" for s in symbols for tf in timeframes]
 
-    print("🚀 جاري الاتصال ببث بينانس المباشر...", flush=True)
+    print("🚀 بدء تشغيل الرادار بالخوارزمية الدقيقة...", flush=True)
     try:
         client = SpotWebsocketStreamClient(on_message=message_handler)
         client.subscribe(stream=stream_list)
-        print("✅ تم الاشتراط في العملات بنجاح! الرادار يفحص الشموع الآن...", flush=True)
+        print("✅ تم تفعيل الفحص الدقيق على جميع الفريمات بنجاح!", flush=True)
     except Exception as e:
-        print(f"❌ خطأ في البث: {e}", flush=True)
+        print(f"❌ خطأ في الاتصال: {e}", flush=True)
 
 if __name__ == "__main__":
-    # 1. البدء بفتح اتصال الرادار أولاً
     start_radar()
-
-    # 2. تشغيل سيرفر Flask بعد ذلك
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
