@@ -2,7 +2,7 @@ import time
 import json
 import os
 import threading
-import urllib.request
+import requests
 import websocket
 import pandas as pd
 from datetime import datetime
@@ -23,26 +23,45 @@ def health():
 candle_data = {}
 
 def get_all_futures_symbols():
-    """جلب جميع أزواج USDT النشطة من العقود الآجلة (Futures)"""
-    try:
-        url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read().decode())
-            symbols = [
-                s['symbol'].lower() for s in data['symbols'] 
-                if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'
-            ]
-            print(f"✅ تم جلب جميع عملات الفيوتشرز: {len(symbols)} عملة بنجاح!", flush=True)
-            return symbols
-    except Exception as e:
-        print(f"⚠️ تعذر جلب القائمة الكلية، استخدام القائمة الاحتياطية: {e}", flush=True)
-        return ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", "avaxusdt"]
+    """جلب جميع أزواج USDT النشطة من العقود الآجلة (Futures) مع التمويه لتفادي حظر Binance"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    
+    # محاولة الجلب من رابط Binance الرئيسي
+    urls = [
+        "https://fapi.binance.com/fapi/v1/exchangeInfo",
+        "https://fapi.binance.info/fapi/v1/exchangeInfo"  # رابط احتياطي رسمي من بينانس
+    ]
+
+    for url in urls:
+        try:
+            response = requests.get(url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                symbols = [
+                    s['symbol'].lower() for s in data['symbols'] 
+                    if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'
+                ]
+                if symbols:
+                    print(f"✅ تم جلب جميع عملات الفيوتشرز: {len(symbols)} عملة بنجاح!", flush=True)
+                    return symbols
+        except Exception as e:
+            print(f"⚠️ فشلت المحاولة عبر {url}: {e}", flush=True)
+            continue
+
+    print("⚠️ تعذر جلب القائمة كاملة، استخدام قائمة الطوارئ الموسعة...", flush=True)
+    return [
+        "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", 
+        "avaxusdt", "linkusdt", "nearusdt", "maticusdt", "dotusdt", "ltcusdt", "trxusdt"
+    ]
 
 def check_pattern_strict(df):
     """
     فحص الشروط المحددة بدقة:
-    c1: الشمعة الأولى המرجعية
+    c1: الشمعة الأولى المرجعية
     c2: الشمعة الحمراء (تكسر ذيل c1 وجسمها أكبر من c1)
     c3: الشمعة الخضراء (بالكامل شاملاً الأذيال والجسم داخل نطاق c2)
     """
@@ -54,9 +73,7 @@ def check_pattern_strict(df):
         c2 = df.iloc[-2]
         c3 = df.iloc[-1]
 
-        # -------------------------------------------------------------
         # 1. شروط الشمعة الحمراء (C2)
-        # -------------------------------------------------------------
         is_c2_red = c2['close'] < c2['open']
         if not is_c2_red:
             return False
@@ -64,23 +81,17 @@ def check_pattern_strict(df):
         c2_body = abs(c2['open'] - c2['close'])
         c1_body = abs(c1['open'] - c1['close'])
 
-        # أ) جسم الحمراء أكبر من جسم الشمعة المرجعية
         is_body_bigger = c2_body > c1_body
-
-        # ب) إغلاق الحمراء يكسر أدنى قاع/ذيل للشمعة المرجعية
         breaks_c1_low = c2['close'] < c1['low']
 
         if not (is_body_bigger and breaks_c1_low):
             return False
 
-        # -------------------------------------------------------------
         # 2. شروط الشمعة الخضراء (C3)
-        # -------------------------------------------------------------
         is_c3_green = c3['close'] > c3['open']
         if not is_c3_green:
             return False
 
-        # أ) الخضراء بكاملها (أعلى سعر وأدنى سعر) تتواجد داخل نطاق الحمراء الكامل
         is_fully_inside_red = (c3['low'] >= c2['low']) and (c3['high'] <= c2['high'])
 
         return is_fully_inside_red
@@ -118,7 +129,6 @@ def process_kline(kline):
                 print(f"   📊 إغلاق الخضراء: {kline['c']} | محتواة بالكامل داخل الحمراء [Low: {df.iloc[-2]['low']}, High: {df.iloc[-2]['high']}]", flush=True)
                 print("🔥"*30 + "\n", flush=True)
             else:
-                # طباعة تأكيدية بأن الفحص جاري ولم تتطابق الشروط
                 print(f"🔍 [فحص مغلق]: {symbol.upper()} ({tf}) - غير متطابق", flush=True)
 
 def on_message(ws, message):
@@ -167,7 +177,7 @@ def start_futures_radar():
 
     print("✅ تم توزيع البث المباشر لجميع عملات الفيوتشرز بنجاح!", flush=True)
 
-# تشغيل البث في Thread منفصل مع بداية إقلاع التطبيق
+# تشغيل البث في Thread منفصل
 threading.Thread(target=start_futures_radar, daemon=True).start()
 
 if __name__ == "__main__":
