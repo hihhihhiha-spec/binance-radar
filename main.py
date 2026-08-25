@@ -1,107 +1,146 @@
-import ccxt
-import time
 import os
-import threading
+import time
 import requests
-from datetime import datetime
+import ccxt
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
-# --- إعدادات تيليجرام (مجهزة بالبيانات الخاصة بك) ---
-TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
-CHAT_ID = "6141474899"
+# ================= إعدادات تيليجرام =================
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7941785535:AAEqT4kF2-1r7J4jS7xV9Z8L1mN3p5Q7r2s")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "5119045763")
 
 def send_telegram_message(message):
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
-        requests.post(url, json=payload, timeout=5)
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        return response.json()
     except Exception as e:
-        print(f"Telegram Error: {e}", flush=True)
+        print(f"Error sending telegram message: {e}")
 
-# --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
+# ================= خادم الحفاظ على النشاط (Dummy Server) =================
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Radar is Active")
-    def log_message(self, format, *args): return
+        self.wfile.write(b"Radar is Active and Running!")
+    def log_message(self, format, *args):
+        return
 
-def run_port_server():
+def run_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(('0.0.0.0', port), DummyServer)
+    print(f"Dummy Server running on port {port}")
     server.serve_forever()
 
-threading.Thread(target=run_port_server, daemon=True).start()
+threading.Thread(target=run_server, daemon=True).start()
 
-# --- 2. إعدادات بينانس ---
-exchange = ccxt.binance({'options': {'defaultType': 'future'}, 'enableRateLimit': True})
+# ================= منطق الرادار والاتصال بمنصة بينانس =================
+exchange = ccxt.binance({
+    'enableRateLimit': True,
+    'options': {'defaultType': 'future'}
+})
 
-# --- 3. قائمة الـ 300 عملة ---
-MY_SYMBOLS = [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
-    'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
-    'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT', 'HBAR/USDT', 'ALGO/USDT', 'FIL/USDT', 'ICP/USDT', 'GRT/USDT', 'STX/USDT',
-    'INJ/USDT', 'RNDR/USDT', 'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'THETA/USDT', 'EGLD/USDT', 'AAVE/USDT', 'UNI/USDT',
-    'SUSHI/USDT', 'DYDX/USDT', 'CRV/USDT', 'MKR/USDT', 'LDO/USDT', 'PENDLE/USDT', 'ENS/USDT', 'ID/USDT', 'MAV/USDT', 'EDU/USDT',
-    'GALA/USDT', 'ORDI/USDT', '1000SATS/USDT', 'BEAMX/USDT', 'PYTH/USDT', 'JUP/USDT', 'STRK/USDT', 'DYM/USDT', 'MANTA/USDT', 'ALT/USDT',
-    'ZETA/USDT', 'PIXEL/USDT', 'RONIN/USDT', 'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'IMX/USDT', 'FLOW/USDT', 'CHZ/USDT', 'ENJ/USDT',
-    'YGG/USDT', 'ILV/USDT', 'MAGIC/USDT', 'RUNE/USDT', 'KAS/USDT', 'TWT/USDT', 'GAS/USDT', 'NEO/USDT', 'QTUM/USDT', 'VET/USDT',
-    'CFX/USDT', 'KAVA/USDT', 'IOTA/USDT', 'ZIL/USDT', 'ONT/USDT', 'BAT/USDT', 'MASK/USDT', 'LRC/USDT', 'ANKR/USDT', 'LPT/USDT',
-    'BLUR/USDT', 'JOE/USDT', 'MINA/USDT', 'WOO/USDT', 'ASTR/USDT', 'GLMR/USDT', 'METIS/USDT', 'QNT/USDT', 'GMX/USDT', 'SNX/USDT',
-    '1INCH/USDT', 'ALICE/USDT', 'ALPHA/USDT', 'AMB/USDT', 'APE/USDT', 'API3/USDT', 'AR/USDT', 'ARK/USDT', 'ARKM/USDT', 'ARPA/USDT',
-    'ATA/USDT', 'ATOM/USDT', 'AUCTION/USDT', 'AUDIO/USDT', 'AXL/USDT', 'BAKE/USDT', 'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT',
-    'BIGTIME/USDT', 'BLZ/USDT', 'BNX/USDT', 'BSV/USDT', 'BSW/USDT', 'C98/USDT', 'CAKE/USDT', 'CELO/USDT', 'CELR/USDT', 'COMBO/USDT',
-    'COMP/USDT', 'COTI/USDT', 'CTK/USDT', 'CTSI/USDT', 'CVP/USDT', 'DAR/USDT', 'DASH/USDT', 'DATA/USDT', 'DENT/USDT', 'DGB/USDT',
-    'DOCK/USDT', 'DODO/USDT', 'DUSK/USDT', 'EPX/USDT', 'ERN/USDT', 'ETC/USDT', 'FLM/USDT', 'FRONT/USDT', 'FTM/USDT', 'FXS/USDT',
-    'GAL/USDT', 'GHST/USDT', 'GLM/USDT', 'GMT/USDT', 'GNO/USDT', 'GTC/USDT', 'HARD/USDT', 'HFT/USDT', 'HIGH/USDT', 'HOOK/USDT',
-    'HOT/USDT', 'ICX/USDT', 'IDEX/USDT', 'IOTX/USDT', 'KEY/USDT', 'KNC/USDT', 'KSM/USDT', 'LINA/USDT', 'LOOM/USDT', 'LQTY/USDT',
-    'LSK/USDT', 'LUNC/USDT', 'LUNA/USDT', 'MDT/USDT', 'MOVR/USDT', 'MTL/USDT', 'NKN/USDT', 'NMR/USDT', 'NTRN/USDT', 'NULS/USDT',
-    'OGN/USDT', 'OMG/USDT', 'ONG/USDT', 'OXT/USDT', 'PAXG/USDT', 'PERP/USDT', 'PHB/USDT', 'PIVX/USDT', 'POL/USDT', 'POLS/USDT',
-    'POWR/USDT', 'PROS/USDT', 'PSG/USDT', 'PUNDIX/USDT', 'PYR/USDT', 'QI/USDT', 'QUICK/USDT', 'RAD/USDT', 'RARE/USDT', 'RAY/USDT',
-    'REEF/USDT', 'REI/USDT', 'REN/USDT', 'REQ/USDT', 'RIF/USDT', 'RLC/USDT', 'ROSE/USDT', 'RSR/USDT', 'RSS3/USDT', 'RVN/USDT',
-    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'SPELL/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT',
-    'STPT/USDT', 'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT',
-    'UMA/USDT', 'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT',
-    'WAXP/USDT', 'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT',
-    'XWG/USDT', 'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT',
-    'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
-]
+TIMEFRAMES = ['15m', '1h', '4h', '1d']
+checked_signals = set()
 
-TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
-
-def check_logic(symbol, tf):
-    try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=6)
-        if len(bars) < 3: return False
-        for i in range(len(bars) - 2):
-            c1, c2 = bars[i], bars[i+1]
-            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            if cl1 < o1 and cl2 < o2:
-                b1, b2 = abs(o1-cl1), abs(o2-cl2)
-                u1, u2 = (h1-max(o1,cl1)), (h2-max(o2,cl2))
-                lt1, lt2 = (min(o1,cl1)-l1), (min(o2,cl2)-l2)
-                if b1 > (u1+lt1) and b2 > (u2+lt2) and lt1 > u1 and lt2 > u2 and cl2 < l1:
-                    return True
+def check_three_candle_pattern(ohlcv):
+    """
+    التحقق من نمط الشموع:
+    1. شمعة [i-2]: حمراء.
+    2. شمعة [i-1]: حمراء، طويلة، ولها ذيل سفلي طويل جداً (رفض سعري).
+    3. شمعة [i]: خضراء، وجسمها بالكامل يقع داخل جسم الشمعة الحمراء الثانية (محتواة داخله).
+    """
+    if len(ohlcv) < 3:
         return False
-    except: return False
-
-print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل رادار بينانس بنجاح ويعمل الآن على فحص العملات...")
-
-while True:
-    try:
-        for index, symbol in enumerate(MY_SYMBOLS, 1):
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] ({index}/{len(MY_SYMBOLS)}) Scanning: {symbol}", flush=True)
-            for tf in TIMEFRAMES:
-                if check_logic(symbol, tf):
-                    alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
-                    send_telegram_message(alert_msg)
-            time.sleep(0.02)
+    
+    c1, c2, c3 = ohlcv[-3], ohlcv[-2], ohlcv[-1]
+    
+    # 1. الشمعة الأولى [i-2] حمراء
+    open1, close1 = c1[1], c1[4]
+    is_red_1 = close1 < open1
+    
+    # 2. الشمعة الثانية [i-1] (الرئيسية ذات الذيل الطويل)
+    open2, high2, low2, close2 = c2[1], c2[2], c2[3], c2[4]
+    is_red_2 = close2 < open2
+    body2 = abs(close2 - open2)
+    lower_wick2 = min(open2, close2) - low2
+    
+    # شروط الشمعة الثانية: حمراء، جسم واضح، ذيل سفلي طويل جداً (أكبر من الجسم بضعفين على الأقل)
+    cond_candle_2 = (is_red_2 and body2 > 0 and lower_wick2 >= (body2 * 2))
+    
+    # 3. الشمعة الثالثة [i] (الخضراء الداخلية)
+    open3, close3 = c3[1], c3[4]
+    is_green_3 = close3 > open3
+    
+    # حدود جسم الشمعة الثانية (الأعلى والأسفل للجسم فقط)
+    body2_top = max(open2, close2)
+    body2_bottom = min(open2, close2)
+    
+    # حدود جسم الشمعة الثالثة
+    body3_top = max(open3, close3)
+    body3_bottom = min(open3, close3)
+    
+    # شرط أن تكون الشمعة الخضراء بالكامل داخل جسم الشمعة الحمراء الثانية
+    is_inside_body = (is_green_3 and body3_top <= body2_top and body3_bottom >= body2_bottom)
+    
+    # التحقق من اكتمال النموذج
+    if is_red_1 and cond_candle_2 and is_inside_body:
+        return True
         
-        print("--- Cycle Finished. Restarting Now ---", flush=True)
-        time.sleep(5)
+    return False
+
+def scan_market():
+    print("Fetching markets from Binance...")
+    try:
+        exchange.load_markets()
+        symbols = [symbol for symbol in exchange.symbols if '/USDT:USDT' in symbol or symbol.endswith('/USDT')]
     except Exception as e:
-        print(f"Error: {e}", flush=True)
-        time.sleep(20)
+        print(f"Error loading markets: {e}")
+        return
+
+    print(f"Monitoring {len(symbols)} symbols across timeframes: {TIMEFRAMES}")
+    send_telegram_message("🚀 *تم تحديث الرادار بنجاح: الشمعة الخضراء أصبحت مشروطة بأن تكون داخل جسم الشمعة الحمراء بدقة!*")
+
+    while True:
+        for symbol in symbols:
+            for tf in TIMEFRAMES:
+                try:
+                    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
+                    if not ohlcv or len(ohlcv) < 3:
+                        continue
+                    
+                    last_candle_time = ohlcv[-1][0]
+                    signal_id = f"{symbol}_{tf}_{last_candle_time}"
+                    
+                    if signal_id in checked_signals:
+                        continue
+
+                    if check_three_candle_pattern(ohlcv):
+                        checked_signals.add(signal_id)
+                        
+                        if len(checked_signals) > 2000:
+                            checked_signals.clear()
+
+                        msg = (
+                            f"🚨 *فرصة مطابقة للنموذج بدقة!*\n\n"
+                            f"🪙 العملة: `{symbol}`\n"
+                            f"⏱ الفريم: `{tf}`\n"
+                            f"📊 الاستراتيجية: شمعتان حمراوان (الثانية بذيل طويل) + خضراء داخل جسم الثانية\n"
+                            f"⏰ الوقت: تفعيل إشارة الشمعة الأخيرة."
+                        )
+                        send_telegram_message(msg)
+                        print(f"Signal found and sent: {symbol} on {tf}")
+
+                    time.sleep(exchange.rateLimit / 1000)
+                except Exception as e:
+                    continue
+        
+        time.sleep(30)
+
+if __name__ == "__main__":
+    scan_market()
