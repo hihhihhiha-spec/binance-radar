@@ -5,12 +5,13 @@ import pandas as pd
 from datetime import datetime
 from flask import Flask
 from concurrent.futures import ThreadPoolExecutor
+import threading
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Fast Multi-threaded Radar Active 24/7", 200
+    return "Binance Live Tracker Active 24/7", 200
 
 @app.route('/health')
 def health():
@@ -42,6 +43,7 @@ ALL_FUTURES_SYMBOLS = [
 
 def check_symbol_tf(symbol):
     timeframes = ['1m', '3m', '5m', '15m']
+    found_match = False
     for tf in timeframes:
         try:
             url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={tf}&limit=10"
@@ -85,27 +87,29 @@ def check_symbol_tf(symbol):
                 is_fully_inside_red = (c3['low'] >= c2['low']) and (c3['high'] <= c2['high'])
 
                 if is_fully_inside_red:
+                    found_match = True
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     print("\n" + "🔥"*30, flush=True)
-                    print(f"🚨 [فرصة مؤكدة] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
+                    print(f"🚨 [فرصة مؤكدة حقيقية] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
                     print(f"   📊 إغلاق الخضراء: {c3['close']} | نطاق الحمراء [Low: {c2['low']}, High: {c2['high']}]", flush=True)
                     print("🔥"*30 + "\n", flush=True)
-                    break
 
         except Exception:
             pass
+            
+    # يطبع لك أن العملة تم فحصها، وإذا وجد فرصة سيخبرك بها فوراً
+    if not found_match:
+        print(f"🔍 [فحص تتبع]: تم فحص العملة {symbol} - لم يتحقق النموذج بعد.", flush=True)
 
 def run_radar_loop():
-    print(f"🚀 تم تشغيل الرادار السريع جداً بـ Multi-threading ({len(ALL_FUTURES_SYMBOLS)} عملة)...", flush=True)
+    print(f"🚀 بدء تتبع ونظام النتائج المباشرة لـ {len(ALL_FUTURES_SYMBOLS)} عملة...", flush=True)
     while True:
-        print(f"⚡ [بدء دورة سريعة]: جاري فحص السوق بالتوازي...", flush=True)
-        # فحص 20 عملة في نفس الوقت لضمان السرعة وعدم تجمد الـ Logs
-        with ThreadPoolExecutor(max_workers=20) as executor:
+        print(f"⚡ [دورة جديدة تبدأ الآن]...", flush=True)
+        with ThreadPoolExecutor(max_workers=10) as executor:
             executor.map(check_symbol_tf, ALL_FUTURES_SYMBOLS)
-        print(f"✅ انتهت الدورة. استراحة قصيرة...", flush=True)
-        time.sleep(5)
+        print(f"✅ انتهت دورة الفحص. جاري مراجعة النتائج والبدء من جديد...", flush=True)
+        time.sleep(10)
 
-import threading
 threading.Thread(target=run_radar_loop, daemon=True).start()
 
 if __name__ == "__main__":
