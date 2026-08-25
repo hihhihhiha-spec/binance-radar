@@ -67,32 +67,26 @@ MY_SYMBOLS = [
     'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
 ]
 
-TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
+TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
 def check_logic(symbol, tf):
     try:
-        # نحتاج آخر 3 شموع للنموذج (الشمعة الأولى، الثانية الرئيسية بذيل طويل، والثالثة الخضراء الداخلية)
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
         if len(bars) < 3: 
             return False
         
-        # نأخذ آخر ثلاث شموع مغلقة أو جارية
         c1, c2, c3 = bars[-3], bars[-2], bars[-1]
         
         o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
         o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
         o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
         
-        # 1. الشمعة الأولى حمراء
         is_red_1 = cl1 < o1
-        
-        # 2. الشمعة الثانية حمراء + ذات ذيل سفلي طويل جداً للرفض (أكبر من الجسم بضعفين على الأقل)
         is_red_2 = cl2 < o2
         body2 = abs(o2 - cl2)
         lower_wick2 = min(o2, cl2) - l2
         cond_candle_2 = (is_red_2 and body2 > 0 and lower_wick2 >= (body2 * 2))
         
-        # 3. الشمعة الثالثة خضراء + جسمها بالكامل يقع داخل جسم الشمعة الحمراء الثانية
         is_green_3 = cl3 > o3
         body2_top = max(o2, cl2)
         body2_bottom = min(o2, cl2)
@@ -109,7 +103,7 @@ def check_logic(symbol, tf):
         return False
 
 print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل رادار بينانس بنجاح بالاستراتيجية الجديدة (الشموع الثلاثة ذات الذيل والاحتواء)...")
+send_telegram_message("🚀 تم تحديث رادار بينانس وإضافة فريمات 1m و 3m بنجاح!")
 
 while True:
     try:
@@ -117,7 +111,7 @@ while True:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] ({index}/{len(MY_SYMBOLS)}) Scanning: {symbol}", flush=True)
             for tf in TIMEFRAMES:
                 if check_logic(symbol, tf):
-                    alert_msg = f"🎯 *تنبيه رادار بينانس (نموذج الشموع الجديد)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
             time.sleep(0.02)
