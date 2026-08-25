@@ -6,7 +6,7 @@ import requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- إعدادات تيليجرام (مجهزة بالبيانات الخاصة بك) ---
+# --- إعدادات تيليجرام ---
 TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
 CHAT_ID = "6141474899"
 
@@ -18,7 +18,7 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram Send Error: {e}", flush=True)
 
-# --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
+# --- 1. حل مشكلة توقف Render ---
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -33,13 +33,13 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات بينانس ---
+# --- 2. إعدادات بينانس مع تفعيل الحماية القصوى ---
 exchange = ccxt.binance({
     'options': {'defaultType': 'future'},
-    'enableRateLimit': True
+    'enableRateLimit': True,
+    'timeout': 30000
 })
 
-# --- 3. قائمة الـ 300 عملة ---
 MY_SYMBOLS = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
     'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
@@ -105,12 +105,17 @@ def check_logic(symbol, tf):
                 
         return False
     except Exception as e:
-        # الآن سيطبع أي خطأ بوضوح في السجلات لكي نراه فوراً
-        print(f"Error checking {symbol} on {tf}: {e}", flush=True)
+        error_str = str(e)
+        if "-1003" in error_str or "418" in error_str:
+            print(f"⚠️ تنبيه حظر (IP Ban) من بينانس! البت يتوقف مؤقتاً لحماية السيرفر...", flush=True)
+            # مدة الحظر التلقائي من بينانس عادة تكون 5 دقائق (300 ثانية)
+            time.sleep(300) 
+        else:
+            print(f"Error checking {symbol} on {tf}: {e}", flush=True)
         return False
 
-print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار مع طباعة الأخطاء وسجلات الفحص بوضوح.")
+print(f"🚀 Radar Started with Anti-Ban Protection: {len(MY_SYMBOLS)} symbols.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار مع نظام الحماية الذكي ضد حظر الآيبي.")
 
 while True:
     try:
@@ -121,11 +126,14 @@ while True:
                     print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
                 
-                # توقف آمن لمنع الحظر
-                time.sleep(0.3)
+                # زيادة التوقف الأمني بين كل طلب وفريم لمنع استهلاك الحد المسموح
+                time.sleep(0.5)
+            
+            # استراحة قصيرة بعد كل عملة
+            time.sleep(1.0)
         
-        print("--- Cycle Finished. Restarting Now ---", flush=True)
-        time.sleep(10)
+        print("--- Cycle Finished. Resting before next cycle ---", flush=True)
+        time.sleep(30)
     except Exception as e:
         print(f"Main Loop Error: {e}", flush=True)
-        time.sleep(30)
+        time.sleep(60)
