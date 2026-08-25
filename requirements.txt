@@ -2,3 +2,4 @@ flask
 pandas
 websocket-client
 gunicorn
+requests
