@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Live Tracker Active 24/7", 200
+    return "Binance Precise Radar Active 24/7", 200
 
 @app.route('/health')
 def health():
@@ -42,11 +42,12 @@ ALL_FUTURES_SYMBOLS = [
 ]
 
 def check_symbol_tf(symbol):
-    timeframes = ['1m', '3m', '5m', '15m']
-    found_match = False
+    # نركز على فريم 1m و 3m و 5m كما في صورتك
+    timeframes = ['1m', '3m', '5m']
     for tf in timeframes:
         try:
-            url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={tf}&limit=10"
+            # نسحب آخر 15 شمعة لنفحص بدقة الشموع الأخيرة المغلقة
+            url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={tf}&limit=15"
             res = requests.get(url, timeout=2)
             if res.status_code != 200:
                 continue
@@ -62,53 +63,42 @@ def check_symbol_tf(symbol):
             df['low'] = df['low'].astype(float)
             df['close'] = df['close'].astype(float)
 
-            for i in range(len(df) - 1, 2, -1):
-                c1 = df.iloc[i - 2]
-                c2 = df.iloc[i - 1]
-                c3 = df.iloc[i]
+            # نفحص الشموع من الخلف إلى الأمام
+            for i in range(len(df) - 1, 1, -1):
+                c1 = df.iloc[i - 1] # الشمعة الحمراء الكاسرة
+                c2 = df.iloc[i]     # الشمعة الخضراء المحتواة
 
-                is_c2_red = c2['close'] < c2['open']
-                if not is_c2_red:
+                # 1. الشمعة الأولى يجب أن تكون حمراء (إغلاق أقل من افتتاح)
+                is_c1_red = c1['close'] < c1['open']
+                if not is_c1_red:
                     continue
 
-                c2_body = abs(c2['open'] - c2['close'])
-                c1_body = abs(c1['open'] - c1['close'])
-
-                is_body_bigger = c2_body > c1_body
-                breaks_c1_low = c2['close'] < c1['low']
-
-                if not (is_body_bigger and breaks_c1_low):
+                # 2. الشمعة الثانية يجب أن تكون خضراء (إغلاق أعلى من افتتاح)
+                is_c2_green = c2['close'] > c2['open']
+                if not is_c2_green:
                     continue
 
-                is_c3_green = c3['close'] > c3['open']
-                if not is_c3_green:
-                    continue
+                # 3. الشرط الأساسي: الشمعة الخضراء محتواة بالكامل داخل نطاق الشمعة الحمراء التي قبلها
+                # (قاع الخضراء >= قاع الحمراء، وقمتها <= قمة الحمراء)
+                is_fully_inside = (c2['low'] >= c1['low']) and (c2['high'] <= c1['high'])
 
-                is_fully_inside_red = (c3['low'] >= c2['low']) and (c3['high'] <= c2['high'])
-
-                if is_fully_inside_red:
-                    found_match = True
+                if is_fully_inside:
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     print("\n" + "🔥"*30, flush=True)
-                    print(f"🚨 [فرصة مؤكدة حقيقية] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
-                    print(f"   📊 إغلاق الخضراء: {c3['close']} | نطاق الحمراء [Low: {c2['low']}, High: {c2['high']}]", flush=True)
+                    print(f"🚨 [تم رصد النموذج بدقة] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
+                    print(f"   📊 الحمراء [Low: {c1['low']}, High: {c1['high']}] | الخضراء المحتواة [Low: {c2['low']}, High: {c2['high']}]", flush=True)
                     print("🔥"*30 + "\n", flush=True)
+                    return
 
         except Exception:
             pass
-            
-    # يطبع لك أن العملة تم فحصها، وإذا وجد فرصة سيخبرك بها فوراً
-    if not found_match:
-        print(f"🔍 [فحص تتبع]: تم فحص العملة {symbol} - لم يتحقق النموذج بعد.", flush=True)
 
 def run_radar_loop():
-    print(f"🚀 بدء تتبع ونظام النتائج المباشرة لـ {len(ALL_FUTURES_SYMBOLS)} عملة...", flush=True)
+    print(f"🚀 بدء التشغيل بالدقة المطلوبة للمستطيل ({len(ALL_FUTURES_SYMBOLS)} عملة)...", flush=True)
     while True:
-        print(f"⚡ [دورة جديدة تبدأ الآن]...", flush=True)
         with ThreadPoolExecutor(max_workers=10) as executor:
             executor.map(check_symbol_tf, ALL_FUTURES_SYMBOLS)
-        print(f"✅ انتهت دورة الفحص. جاري مراجعة النتائج والبدء من جديد...", flush=True)
-        time.sleep(10)
+        time.sleep(5)
 
 threading.Thread(target=run_radar_loop, daemon=True).start()
 
