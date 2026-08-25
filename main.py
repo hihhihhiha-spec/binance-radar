@@ -1,82 +1,64 @@
 import ccxt
 import time
-import requests
 import pandas as pd
 from datetime import datetime
 import os
 import threading
 from flask import Flask
 
-# 1. إعداد تطبيق Flask
+# سيرفر وهمي لتشغيل الخدمة على Render بدون خطأ No open ports
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Radar is Active & Running 24/7!", 200
+    return "Binance Radar is Running on Render!", 200
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-# 2. إعدادات بوت تليجرام
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-def send_telegram_alert(message):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ لم يتم ضبط TELEGRAM_TOKEN أو TELEGRAM_CHAT_ID في Environment Variables.")
-        return
-
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"❌ خطأ في إرسال تليجرام: {e}")
-
 def check_pattern(df):
-    if df is None or len(df) < 3:
+    """فحص شروط الشموع"""
+    try:
+        if df is None or len(df) < 3:
+            return False
+
+        prev_candle = df.iloc[-3]
+        red_candle = df.iloc[-2]
+        green_candle = df.iloc[-1]
+
+        # 1. شمعة حمراء أكبر من التي قبلها وتغلق تحت ذيلها
+        is_red = red_candle['close'] < red_candle['open']
+        red_body = abs(red_candle['close'] - red_candle['open'])
+        prev_body = abs(prev_candle['close'] - prev_candle['open'])
+        
+        is_bigger = red_body > prev_body
+        breaks_lower_tail = red_candle['close'] < prev_candle['low']
+
+        if not (is_red and is_bigger and breaks_lower_tail):
+            return False
+
+        # 2. شمعة خضراء تالية تغلق عند نصف الشمعة الحمراء على الأقل
+        is_green = green_candle['close'] > green_candle['open']
+        red_midpoint = red_candle['open'] - (red_body / 2)
+        closes_at_half = green_candle['close'] >= red_midpoint
+
+        return is_green and closes_at_half
+    except Exception:
         return False
-
-    prev_candle = df.iloc[-3]
-    red_candle = df.iloc[-2]
-    green_candle = df.iloc[-1]
-
-    # شمعة حمراء أكبر من التي قبلها وتغلق تحت ذيلها
-    is_red = red_candle['close'] < red_candle['open']
-    red_body = abs(red_candle['close'] - red_candle['open'])
-    prev_body = abs(prev_candle['close'] - prev_candle['open'])
-    
-    is_bigger = red_body > prev_body
-    breaks_lower_tail = red_candle['close'] < prev_candle['low']
-
-    if not (is_red and is_bigger and breaks_lower_tail):
-        return False
-
-    # شمعة خضراء تالية تغلق عند نصف الشمعة الحمراء على الأقل
-    is_green = green_candle['close'] > green_candle['open']
-    red_midpoint = red_candle['open'] - (red_body / 2)
-    closes_at_half = green_candle['close'] >= red_midpoint
-
-    return is_green and closes_at_half
 
 def run_radar():
-    """دالة فحص الرادار في الخلفية"""
-    # انتظار ثانيتين لضمان استقرار سيرفر Flask أولاً
+    """المحرك الرئيسي للرادار الذي يعمل داخل Render"""
     time.sleep(2)
     
     exchange = ccxt.binance({
-        'enableRateLimit': True,
+        'enableRateLimit': True, # منع حظر الـ IP
         'timeout': 15000,
         'options': {'defaultType': 'spot'}
     })
 
     timeframes = ['1m', '3m', '5m', '1h']
-    print("🚀 تم بدء تشغيل محرك الرادار بنجاح...")
+    print("🚀 تم تشغيل الرادار بنجاح على سيرفر Render... جاري الفحص...")
 
     while True:
         try:
@@ -92,33 +74,33 @@ def run_radar():
 
                         df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
 
+                        # عند تحقق الشرط
                         if check_pattern(df):
                             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            msg = f"🚨 **[تنبيه رادار Binance]**\n\n🔹 **العملة:** `{symbol}`\n🔹 **الفريم:** `{tf}`\n⏰ **الوقت:** `{now}`"
-                            print(msg)
-                            send_telegram_alert(msg)
+                            print("\n" + "="*60)
+                            print(f"🚨 [تم الرصد على Render] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}")
+                            print("="*60 + "\n")
 
                     except ccxt.RateLimitExceeded as e:
-                        print(f"🛑 [تجاوز RateLimit]: {e}")
+                        print(f"🛑 [تنبيه IP]: تم تجاوز معدل الطلبات، جاري الانتظار 10 ثوانٍ... {e}")
                         time.sleep(10)
-                    except Exception:
-                        pass
+                    except ccxt.NetworkError as e:
+                        print(f"🌐 [خطأ شبكة]: تعذر الاتصال بـ Binance: {e}")
+                        time.sleep(2)
+                    except Exception as e:
+                        print(f"⚠️ [خطأ في العملة {symbol} فريم {tf}]: {e}")
                     
-                    time.sleep(0.12)
+                    time.sleep(0.12) # حماية IP من الحظر
 
         except Exception as e:
-            print(f"❌ [خطأ عام في الرادار]: {e}")
+            print(f"❌ [خطأ عام في السكربت]: {e} | جاري إعادة المحاولة خلال 5 ثوانٍ...")
             time.sleep(5)
 
-# 3. نقطة التشغيل الرئيسية
 if __name__ == "__main__":
-    # تشغيل الرادار في Thread منفصل في الخلفية
-    radar_thread = threading.Thread(target=run_radar, daemon=True)
-    radar_thread.start()
+    # تشغيل الرادار في خلفية السيرفر
+    threading.Thread(target=run_radar, daemon=True).start()
 
-    # جلب البورت المخصص من Render أو استخدام 10000 كافتراضي
+    # تشغيل البورت الخاص بموقع Render
     port = int(os.environ.get("PORT", 10000))
-    print(f"🌐 جاري تشغيل سيرفر الويب على البورت {port}...")
-    
-    # تشغيل Flask كسيرفر رئيسي يستجيب لـ Render فوراً
     app.run(host='0.0.0.0', port=port)
+    
