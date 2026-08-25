@@ -7,7 +7,7 @@ from datetime import datetime
 from flask import Flask
 from binance.websocket.spot.websocket_stream import SpotWebsocketStreamClient
 
-# سيرفر Flask لتفادي أخطاء البورت على Render
+# 1. سيرفر Flask متوافق مع منصة Render لتفادي أخطاء البورت
 app = Flask(__name__)
 
 @app.route('/')
@@ -18,11 +18,11 @@ def home():
 def health():
     return "OK", 200
 
-# مخزن البيانات المؤقت
+# مخزن البيانات المؤقت للشموع
 candle_data = {}
 
 def check_pattern(df):
-    """فحص شرط الشموع المحددة"""
+    """فحص شرط الشموع المطلوب"""
     try:
         if df is None or len(df) < 3:
             return False
@@ -59,7 +59,7 @@ def message_handler(_, message):
             kline = data['data']['k']
             symbol = kline['s']
             tf = kline['i']
-            is_closed = kline['x']  # فقط عند إغلاق الشمعة
+            is_closed = kline['x']  # الفحص يتم فقط عند إغلاق الشمعة
 
             if is_closed:
                 key = f"{symbol}_{tf}"
@@ -73,15 +73,21 @@ def message_handler(_, message):
                     'close': float(kline['c'])
                 })
 
+                # الاحتفاظ بآخر 5 شموع فقط لتوفير الذاكرة
                 if len(candle_data[key]) > 5:
                     candle_data[key].pop(0)
 
-                if len(candle_data[key]) >= 3:
+                # طباعة تأكيدية في الـ Logs لتأكيد استلام الشمعة
+                stored_count = len(candle_data[key])
+                print(f"📥 [شمعة مغلقة] {symbol} | فريم {tf} | الإغلاق: {kline['c']} | الشموع المكتملة: {stored_count}/3")
+
+                # الفحص يبدأ فور توفر 3 شموع مكتملة
+                if stored_count >= 3:
                     df = pd.DataFrame(candle_data[key])
                     if check_pattern(df):
                         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         print("\n" + "="*60)
-                        print(f"🚨 [تم الرصد عبر البث المباشر] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}")
+                        print(f"🚨 [تم الرصد بنجاح] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}")
                         print("="*60 + "\n")
     except Exception:
         pass
