@@ -12,17 +12,17 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Radar is Running 24/7!", 200
+    return "Binance Radar (WebSocket) is Active 24/7!", 200
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-# مخزن لحفظ الشموع الأخيرة لكل عملة وفريم
+# مخزن لحفظ البيانات المؤقتة
 candle_data = {}
 
 def check_pattern(df):
-    """فحص شروط الشموع المطلوب"""
+    """فحص شرط الشموع المطلوبة"""
     try:
         if df is None or len(df) < 3:
             return False
@@ -56,7 +56,7 @@ def message_handler(_, message):
     try:
         payload = json.loads(message)
         
-        # استخراج البيانات سواء كانت مباشرة أو تغليف Combined Stream
+        # استخراج الشمعة
         kline = None
         if 'k' in payload:
             kline = payload['k']
@@ -66,7 +66,7 @@ def message_handler(_, message):
         if kline:
             symbol = kline['s']
             tf = kline['i']
-            is_closed = kline['x']  # الفحص يتم فقط عند إغلاق الشمعة
+            is_closed = kline['x']  # الفحص عند الإغلاق فقط
 
             if is_closed:
                 key = f"{symbol}_{tf}"
@@ -80,51 +80,44 @@ def message_handler(_, message):
                     'close': float(kline['c'])
                 })
 
-                # الاحتفاظ بآخر 5 شموع فقط
                 if len(candle_data[key]) > 5:
                     candle_data[key].pop(0)
 
                 stored_count = len(candle_data[key])
-                print(f"📥 [إغلاق شمعة] | {symbol} | فريم: {tf} | السعر: {kline['c']} | مخزن: {stored_count}/3")
+                print(f"📥 [إغلاق شمعة] | {symbol} | فريم: {tf} | السعر: {kline['c']} | مخزن: {stored_count}/3", flush=True)
 
-                # بدء الفحص عند توفر 3 شموع مكتملة
                 if stored_count >= 3:
                     df = pd.DataFrame(candle_data[key])
                     if check_pattern(df):
                         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        print("\n" + "="*60)
-                        print(f"🚨 [تم الرصد بنجاح] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}")
-                        print("="*60 + "\n")
+                        print("\n" + "="*60, flush=True)
+                        print(f"🚨 [تم الرصد بنجاح] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
+                        print("="*60 + "\n", flush=True)
     except Exception as e:
         pass
 
-def start_radar_stream():
-    """تشغيل البث المباشر لأهم العملات"""
+def start_radar():
+    """تشغيل البث المباشر"""
     symbols = [
         "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", 
         "adausdt", "dogeusdt", "avaxusdt", "dotusdt", "linkusdt"
     ]
     timeframes = ['1m', '3m', '5m', '1h']
 
-    stream_list = []
-    for symbol in symbols:
-        for tf in timeframes:
-            stream_list.append(f"{symbol}@kline_{tf}")
+    stream_list = [f"{s}@kline_{tf}" for s in symbols for tf in timeframes]
 
-    print("🚀 جاري الاتصال ببث بينانس المباشر...")
-    
+    print("🚀 جاري الاتصال ببث بينانس المباشر...", flush=True)
     try:
-        # تشغيل عميل بينانس المباشر
-        my_client = SpotWebsocketStreamClient(on_message=message_handler)
-        my_client.subscribe(stream=stream_list)
-        print("✅ تم الاشتراك في جميع الفريمات بنجاح! الرادار يستمع للشموع الآن...")
+        client = SpotWebsocketStreamClient(on_message=message_handler)
+        client.subscribe(stream=stream_list)
+        print("✅ تم الاشتراط في العملات بنجاح! الرادار يفحص الشموع الآن...", flush=True)
     except Exception as e:
-        print(f"❌ خطأ في الاتصال بالبث: {e}")
+        print(f"❌ خطأ في البث: {e}", flush=True)
 
 if __name__ == "__main__":
-    # تشغيل محرك الرادار في خلفية مستقلا
-    threading.Thread(target=start_radar_stream, daemon=True).start()
+    # 1. البدء بفتح اتصال الرادار أولاً
+    start_radar()
 
-    # تشغيل سيرفر Render الرئيسي
+    # 2. تشغيل سيرفر Flask بعد ذلك
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
