@@ -2,13 +2,12 @@ import time
 import json
 import os
 import threading
-import requests
+import urllib.request
 import websocket
 import pandas as pd
 from datetime import datetime
 from flask import Flask
 
-# 1. إنشاء تطبيق Flask لبيئة Render
 app = Flask(__name__)
 
 @app.route('/')
@@ -19,43 +18,53 @@ def home():
 def health():
     return "OK", 200
 
-# مخزن لحفظ الشموع الأخيرة
 candle_data = {}
 
 def get_all_futures_symbols():
-    """جلب جميع أزواج USDT النشطة من العقود الآجلة (Futures) مع التمويه لتفادي حظر Binance"""
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9',
-    }
-    
-    # محاولة الجلب من رابط Binance الرئيسي
-    urls = [
-        "https://fapi.binance.com/fapi/v1/exchangeInfo",
-        "https://fapi.binance.info/fapi/v1/exchangeInfo"  # رابط احتياطي رسمي من بينانس
-    ]
+    """جلب جميع أزواج USDT النشطة للفيوتشرز عبر مصادر بديلة مجانية متوافقة مع Render"""
+    # المصدر 1: Binance Vision API
+    try:
+        url = "https://data-api.binance.vision/api/v3/exchangeInfo"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            symbols = [
+                s['symbol'].lower() for s in data['symbols'] 
+                if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'
+            ]
+            if len(symbols) > 50:
+                print(f"✅ تم جلب جميع عملات الفيوتشرز: {len(symbols)} عملة بنجاح!", flush=True)
+                return symbols
+    except Exception:
+        pass
 
-    for url in urls:
-        try:
-            response = requests.get(url, headers=headers, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                symbols = [
-                    s['symbol'].lower() for s in data['symbols'] 
-                    if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'
-                ]
-                if symbols:
-                    print(f"✅ تم جلب جميع عملات الفيوتشرز: {len(symbols)} عملة بنجاح!", flush=True)
-                    return symbols
-        except Exception as e:
-            print(f"⚠️ فشلت المحاولة عبر {url}: {e}", flush=True)
-            continue
+    # المصدر 2: Coingecko API لرموز الفيوتشرز
+    try:
+        url = "https://api.coingecko.com/api/v3/derivatives/exchanges/binance_futures"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            symbols = []
+            for item in data.get('tickers', []):
+                if item.get('target') == 'USDT':
+                    s = item.get('symbol').lower().replace('_', '').replace('-', '')
+                    if s.endswith('usdt'):
+                        symbols.append(s)
+            symbols = list(set(symbols))
+            if len(symbols) > 50:
+                print(f"✅ تم جلب قائمة العملات بنجاح عبر Coingecko: {len(symbols)} عملة!", flush=True)
+                return symbols
+    except Exception:
+        pass
 
-    print("⚠️ تعذر جلب القائمة كاملة، استخدام قائمة الطوارئ الموسعة...", flush=True)
+    # قائمة احتياطية موسعة شاملة لأهم عملات الفيوتشرز
+    print("⚠️ استخدام القائمة الموسعة الشاملة لعملات الفيوتشرز...", flush=True)
     return [
-        "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", 
-        "avaxusdt", "linkusdt", "nearusdt", "maticusdt", "dotusdt", "ltcusdt", "trxusdt"
+        "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", "avaxusdt",
+        "linkusdt", "nearusdt", "suiusdt", "aptusdt", "rdntusdt", "fetusdt", "injusdt", "wifusdt",
+        "pepeusdt", "flokiusdt", "shibusdt", "renderusdt", "arbusdt", "opusdt", "ldousdt", "tiausdt",
+        "seiusdt", "agixusdt", "arkmusdt", "galausdt", "sandusdt", "manausdt", "gmxusdt", "blurusdt",
+        "stxusdt", "filusdt", "ltcusdt", "trxusdt", "dotusdt", "maticusdt", "atomusdt", "etcusdt"
     ]
 
 def check_pattern_strict(df):
