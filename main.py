@@ -6,10 +6,9 @@ import requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- إعدادات تيليجرام (ضع بياناتك هنا) ---
-TELEGRAM_TOKEN = 8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI
-
-CHAT_ID = 6141474899
+# --- إعدادات تيليجرام (مجهزة بالبيانات الخاصة بك) ---
+TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
+CHAT_ID = "6141474899"
 
 def send_telegram_message(message):
     try:
