@@ -1,3 +1,4 @@
 flask
 pandas
 websocket-client
+gunicorn
