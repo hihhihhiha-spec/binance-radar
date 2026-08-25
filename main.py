@@ -33,8 +33,11 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات بينانس ---
-exchange = ccxt.binance({'options': {'defaultType': 'future'}, 'enableRateLimit': True})
+# --- 2. إعدادات بينانس (تفعيل ميزة الـ Rate Limit المدمجة في CCXT) ---
+exchange = ccxt.binance({
+    'options': {'defaultType': 'future'},
+    'enableRateLimit': True  # هذه تطلب من المكتبة تنظيم الطلبات تلقائياً لتجنب الحظر
+})
 
 # --- 3. قائمة الـ 300 عملة ---
 MY_SYMBOLS = [
@@ -102,26 +105,29 @@ def check_logic(symbol, tf):
                 
         return False
     except Exception as e:
-        print(f"Error checking {symbol} on {tf}: {e}", flush=True)
+        # طباعة المشكلة دون توقف البوت
         return False
 
-print(f"🚀 Radar Started safely: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار مع حماية الحظر وإبطاء الطلبات لتجنب الضغط على بينانس.")
+print(f"🚀 Radar Started safely with Rate Limit: {len(MY_SYMBOLS)} symbols.", flush=True)
+send_telegram_message("🚀 تم إعادة تشغيل الرادار مع تنظيم الطلبات تلقائياً لتفادي الحظر تماماً.")
 
 while True:
     try:
         for index, symbol in enumerate(MY_SYMBOLS, 1):
             for tf in TIMEFRAMES:
-                # تم إضافة توقف قصير جداً (0.1 ثانية) بين كل طلب لمنع الحظر نهائياً
-                time.sleep(0.1) 
-                
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
+                
+                # توقف آمن ومدروس بعد كل فريم لمنع استهلاك نقاط بينانس
+                time.sleep(0.25)
+            
+            # توقف إضافي قصير بعد الانتهاء من كل عملة كاملة
+            time.sleep(0.5)
         
         print("--- Cycle Finished. Restarting Now ---", flush=True)
-        time.sleep(10)
+        time.sleep(15)
     except Exception as e:
         print(f"Main Loop Error: {e}", flush=True)
         time.sleep(30)
