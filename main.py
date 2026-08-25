@@ -16,7 +16,7 @@ def send_telegram_message(message):
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
         requests.post(url, json=payload, timeout=5)
     except Exception as e:
-        print(f"Telegram Error: {e}", flush=True)
+        print(f"Telegram Send Error: {e}", flush=True)
 
 # --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
 class DummyServer(BaseHTTPRequestHandler):
@@ -88,10 +88,6 @@ def check_logic(symbol, tf):
             lower_wick2 = min(o2, cl2) - l2
             cond_candle_2 = (is_red_2 and body2 > 0 and body2 > lower_wick2)
             
-            # طباعة توضيحية إذا تطابقت الشمعة الأولى والثانية لمعرفة هل البوت يراها
-            if is_red_1 and cond_candle_2:
-                print(f"[{symbol}][{tf}] Found Pattern C1 & C2 match, checking C3...", flush=True)
-
             is_green_3 = cl3 > o3
             body2_top = max(o2, cl2)
             body2_bottom = min(o2, cl2)
@@ -101,19 +97,23 @@ def check_logic(symbol, tf):
             is_inside_body = (is_green_3 and body3_top <= body2_top and body3_bottom >= body2_bottom)
             
             if is_red_1 and cond_candle_2 and is_inside_body:
+                print(f"🎯 MATCH FOUND! {symbol} on timeframe {tf}", flush=True)
                 return True
                 
         return False
-    except: 
+    except Exception as e:
+        # طباعة أي خطأ صامت يحدث لكي نراه بوضوح في السجلات
+        print(f"Error checking {symbol} on {tf}: {e}", flush=True)
         return False
 
-print(f"🚀 Radar Started with Debug Logging: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تفعيل وضع المراقبة في السجلات للتاكد من فحص النماذج بدقة.")
+print(f"🚀 Radar Started with Full Debug Logging: {len(MY_SYMBOLS)} symbols.", flush=True)
+send_telegram_message("🚀 تم تشغيل وضع تتبع الأخطاء والفحص الكامل.")
 
 while True:
     try:
         for index, symbol in enumerate(MY_SYMBOLS, 1):
             for tf in TIMEFRAMES:
+                print(f"Scanning -> {symbol} | TF: {tf}", flush=True)  # يطبع كل عملية فحص لترى أن البوت يتحرك
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
@@ -123,5 +123,5 @@ while True:
         print("--- Cycle Finished. Restarting Now ---", flush=True)
         time.sleep(5)
     except Exception as e:
-        print(f"Error: {e}", flush=True)
+        print(f"Main Loop Error: {e}", flush=True)
         time.sleep(20)
