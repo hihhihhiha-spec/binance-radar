@@ -55,11 +55,13 @@ def message_handler(_, message):
     """معالجة بث بينانس المباشر"""
     try:
         data = json.loads(message)
-        if 'data' in data and 'k' in data['data']:
-            kline = data['data']['k']
+        
+        # التعامل مع بيانات الشموع
+        if 'k' in data:
+            kline = data['k']
             symbol = kline['s']
             tf = kline['i']
-            is_closed = kline['x']  # الفحص يتم فقط عند إغلاق الشمعة
+            is_closed = kline['x']  # الفحص عند إغلاق الشمعة
 
             if is_closed:
                 key = f"{symbol}_{tf}"
@@ -73,15 +75,12 @@ def message_handler(_, message):
                     'close': float(kline['c'])
                 })
 
-                # الاحتفاظ بآخر 5 شموع فقط لتوفير الذاكرة
                 if len(candle_data[key]) > 5:
                     candle_data[key].pop(0)
 
-                # طباعة تأكيدية في الـ Logs لتأكيد استلام الشمعة
                 stored_count = len(candle_data[key])
-                print(f"📥 [شمعة مغلقة] {symbol} | فريم {tf} | الإغلاق: {kline['c']} | الشموع المكتملة: {stored_count}/3")
+                print(f"📥 [شمعة مغلقة] {symbol} | فريم {tf} | الإغلاق: {kline['c']} | الشموع المخزنة: {stored_count}/3")
 
-                # الفحص يبدأ فور توفر 3 شموع مكتملة
                 if stored_count >= 3:
                     df = pd.DataFrame(candle_data[key])
                     if check_pattern(df):
@@ -89,7 +88,7 @@ def message_handler(_, message):
                         print("\n" + "="*60)
                         print(f"🚨 [تم الرصد بنجاح] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}")
                         print("="*60 + "\n")
-    except Exception:
+    except Exception as e:
         pass
 
 def start_radar_stream():
@@ -107,11 +106,17 @@ def start_radar_stream():
 
     print("🚀 جاري الاتصال ببث بينانس المباشر بدون حظر IP...")
     
-    try:
-        my_client = SpotWebsocketStreamClient(on_message=message_handler)
-        my_client.subscribe(stream=stream_list)
-    except Exception as e:
-        print(f"❌ خطأ في الاتصال بالبث المباشر: {e}")
+    while True:
+        try:
+            my_client = SpotWebsocketStreamClient(on_message=message_handler)
+            my_client.subscribe(stream=stream_list)
+            
+            # إبقاء الـ Thread حياً ومستمراً
+            while True:
+                time.sleep(1)
+        except Exception as e:
+            print(f"❌ إعادة الاتصال بالبث: {e}")
+            time.sleep(5)
 
 if __name__ == "__main__":
     # تشغيل محرك الرادار في الخلفية
