@@ -1,21 +1,25 @@
-import ccxt
-import time
-import pandas as pd
-from datetime import datetime
+import asyncio
+import json
 import os
 import threading
+import pandas as pd
+from datetime import datetime
 from flask import Flask
+import websockets
 
-# سيرفر وهمي لتشغيل الخدمة على Render بدون خطأ No open ports
+# سيرفر وهمي لمنصة Render
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Radar is Running on Render!", 200
+    return "Binance WebSocket Radar is Running!", 200
 
 @app.route('/health')
 def health():
     return "OK", 200
+
+# مخزن لحفظ أحدث الشموع للعملات
+candle_data = {}
 
 def check_pattern(df):
     """فحص شروط الشموع"""
@@ -47,60 +51,84 @@ def check_pattern(df):
     except Exception:
         return False
 
-def run_radar():
-    """المحرك الرئيسي للرادار الذي يعمل داخل Render"""
-    time.sleep(2)
-    
-    exchange = ccxt.binance({
-        'enableRateLimit': True, # منع حظر الـ IP
-        'timeout': 15000,
-        'options': {'defaultType': 'spot'}
-    })
+async def process_kline(data):
+    """معالجة بيانات الشموع القادمة عبر البث المباشر WebSocket"""
+    try:
+        kline = data['k']
+        symbol = kline['s']
+        tf = kline['i']
+        is_closed = kline['x']  # إغلاق الشمعة
 
+        # نحدث البيانات فقط عند إغلاق الشمعة
+        if is_closed:
+            key = f"{symbol}_{tf}"
+            if key not in candle_data:
+                candle_data[key] = []
+
+            candle_data[key].append({
+                'open': float(kline['o']),
+                'high': float(kline['h']),
+                'low': float(kline['l']),
+                'close': float(kline['c'])
+            })
+
+            # الاحتفاظ بآخر 5 شموع فقط
+            if len(candle_data[key]) > 5:
+                candle_data[key].pop(0)
+
+            if len(candle_data[key]) >= 3:
+                df = pd.DataFrame(candle_data[key])
+                if check_pattern(df):
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print("\n" + "="*60)
+                    print(f"🚨 [رصد المباشر WEBSOCKET] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}")
+                    print("="*60 + "\n")
+    except Exception as e:
+        print(f"⚠️ خطأ معالجة الشمعة: {e}")
+
+async def start_websocket():
+    """الاتصال المباشر ببث بينانس (WebSocket Multi-Stream)"""
+    # أهم العملات الأساسية مقابل USDT (يمكنك إضافة أو تغيير العملات)
+    top_symbols = [
+        "btc usdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", 
+        "dogeusdt", "avaxusdt", "dotusdt", "linkusdt", "nearusdt", "ltcusdt"
+    ]
     timeframes = ['1m', '3m', '5m', '1h']
-    print("🚀 تم تشغيل الرادار بنجاح على سيرفر Render... جاري الفحص...")
+
+    # تجهيز روابط البث المباشر
+    streams = []
+    for s in top_symbols:
+        symbol_clean = s.replace(" ", "").lower()
+        for tf in timeframes:
+            streams.append(f"{symbol_clean}@kline_{tf}")
+
+    stream_url = f"wss://stream.binance.com:9443/ws/" + "/".join(streams)
+
+    print("🚀 جاري الاتصال بـ Binance WebSockets (بث مباشر بدبي حظر IP)...")
 
     while True:
         try:
-            markets = exchange.load_markets()
-            symbols = [s for s in markets if s.endswith('/USDT') and markets[s].get('active', True)]
-
-            for symbol in symbols:
-                for tf in timeframes:
-                    try:
-                        ohlcv = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
-                        if not ohlcv or len(ohlcv) < 3:
-                            continue
-
-                        df = pd.DataFrame(ohlcv, columns=['time', 'open', 'high', 'low', 'close', 'volume'])
-
-                        # عند تحقق الشرط
-                        if check_pattern(df):
-                            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            print("\n" + "="*60)
-                            print(f"🚨 [تم الرصد على Render] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}")
-                            print("="*60 + "\n")
-
-                    except ccxt.RateLimitExceeded as e:
-                        print(f"🛑 [تنبيه IP]: تم تجاوز معدل الطلبات، جاري الانتظار 10 ثوانٍ... {e}")
-                        time.sleep(10)
-                    except ccxt.NetworkError as e:
-                        print(f"🌐 [خطأ شبكة]: تعذر الاتصال بـ Binance: {e}")
-                        time.sleep(2)
-                    except Exception as e:
-                        print(f"⚠️ [خطأ في العملة {symbol} فريم {tf}]: {e}")
-                    
-                    time.sleep(0.12) # حماية IP من الحظر
-
+            async with websockets.connect(stream_url) as ws:
+                print("✅ تم الاتصال بالبث المباشر بنجاح! السكربت يستمع للشموع الآن...")
+                while True:
+                    response = await ws.recv()
+                    data = json.loads(response)
+                    if 'k' in data:
+                        await process_kline(data)
         except Exception as e:
-            print(f"❌ [خطأ عام في السكربت]: {e} | جاري إعادة المحاولة خلال 5 ثوانٍ...")
-            time.sleep(5)
+            print(f"🌐 [انقطاع مؤقت للبث]: {e} | إعادة الاتصال خلال 5 ثوانٍ...")
+            await asyncio.sleep(5)
+
+def run_async_radar():
+    """تشغيل الحلقة التزامنية للـ Asyncio"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(start_websocket())
 
 if __name__ == "__main__":
-    # تشغيل الرادار في خلفية السيرفر
-    threading.Thread(target=run_radar, daemon=True).start()
+    # تشغيل WebSocket في الخلفية
+    threading.Thread(target=run_async_radar, daemon=True).start()
 
-    # تشغيل البورت الخاص بموقع Render
+    # تشغيل سيرفر Flask المخصص لمنصة Render
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
-    
