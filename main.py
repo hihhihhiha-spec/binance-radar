@@ -1,3 +1,4 @@
+
 import time
 import os
 import threading
@@ -91,21 +92,20 @@ def check_symbol_tf(symbol, tf):
         pass
 
 def run_radar_loop():
-    symbols = get_all_futures_symbols()
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h']
-    
-    print("🚀 تم تشغيل الرادار بنجاح المباشر والربط مستقر 100%...", flush=True)
+    print("🚀 تم تشغيل الرادار بنجاح والربط مستقر 100%...", flush=True)
 
     while True:
         try:
-            print(f"🔍 [فحص شامل]: جاري فحص جميع العملات ({len(symbols)}) عبر الفريمات...", flush=True)
+            symbols = get_all_futures_symbols()
+            print(f"🔍 [فحص شامل]: جاري فحص جميع العملات ({len(symbols)}) عبر جميع الفريمات...", flush=True)
             for symbol in symbols:
                 for tf in timeframes:
                     check_symbol_tf(symbol, tf)
-                time.sleep(0.05) # حماية من التوقف
+                time.sleep(0.02)
             
-            print("✅ اكتملت دورة الفحص بنجاح. انتظار الدقيقة القادمة...", flush=True)
-            time.sleep(30) # انتظار نصف دقيقة بين كل دورة فحص شاملة
+            print("✅ اكتملت دورة الفحص لجميع العملات بنجاح. انتظار الدقيقة القادمة...", flush=True)
+            time.sleep(15)
 
         except Exception as e:
             print(f"⚠️ تنبيه: {e}", flush=True)
