@@ -1,107 +1,92 @@
+import ccxt
 import time
 import os
-import requests
-import pandas as pd
-from datetime import datetime
-from flask import Flask
-from concurrent.futures import ThreadPoolExecutor
 import threading
+from datetime import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-app = Flask(__name__)
+# --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
+class DummyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Radar is Active")
+    def log_message(self, format, *args): return # لتقليل الازدحام في السجلات
 
-@app.route('/')
-def home():
-    return "Binance Precise Radar Active 24/7", 200
+def run_port_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), DummyServer)
+    server.serve_forever()
 
-@app.route('/health')
-def health():
-    return "OK", 200
+threading.Thread(target=run_port_server, daemon=True).start()
 
-ALL_FUTURES_SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", 
-    "LINKUSDT", "DOTUSDT", "MATICUSDT", "LTCUSDT", "BCHUSDT", "NEARUSDT", "ATOMUSDT", "UNIUSDT", 
-    "ETCUSDT", "XLMUSDT", "ICPUSDT", "APTUSDT", "FILUSDT", "ARBUSDT", "OPUSDT", "FTMUSDT", 
-    "INJUSDT", "SUIUSDT", "RNDRUSDT", "SEIUSDT", "TIAUSDT", "RENDERUSDT", "PEPEUSDT", "SHIBUSDT", 
-    "FLOKIUSDT", "WIFUSDT", "BONKUSDT", "JUPUSDT", "STRKUSDT", "PENDLEUSDT", "ENAUSDT", "NOTUSDT", 
-    "BOMEUSDT", "BBUSDT", "REZUSDT", "IOUSDT", "ZKUSDT", "LISTAUSDT", "BANANAUSDT", "SYNUSDT", 
-    "LPTUSDT", "API3USDT", "BLURUSDT", "ACEUSDT", "NFPUSDT", "AIUSDT", "XAIUSDT", "MANTAUSDT", 
-    "ALTUSDT", "JTOUSDT", "PYTHUSDT", "MEMEUSDT", "ORDIUSDT", "SATSUSDT", "RATSUSDT", "GALAUSDT", 
-    "SANDUSDT", "MANAUSDT", "AXSUSDT", "CHZUSDT", "ENJUSDT", "GMTUSDT", "IMXUSDT", "MAGICUSDT", 
-    "YGGUSDT", "HIGHUSDT", "PEOPLEUSDT", "IOSTUSDT", "THETAUSDT", "ZILUSDT", "KNCUSDT", "CRVUSDT", 
-    "SUSHIUSDT", "1INCHUSDT", "COMPUSDT", "MKRUSDT", "SNXUSDT", "BALUSDT", "LRCUSDT", "ZRXUSDT", 
-    "BATUSDT", "OCEANUSDT", "COTIUSDT", "KAVAUSDT", "BANDUSDT", "RLCUSDT", "CTKUSDT", "IOTAUSDT", 
-    "ZENUSDT", "SKLUSDT", "GRTUSDT", "STORJUSDT", "HBARUSDT", "ONEUSDT", "HOTUSDT", "VETUSDT", 
-    "ICXUSDT", "ONTUSDT", "QTUMUSDT", "ALGOUSDT", "C98USDT", "DARUSDT", "BAKEUSDT", "SLPUSDT", 
-    "DEGOUSDT", "XVSUSDT", "UNFIUSDT", "TRBUSDT", "AUDIOUSDT", "MBOXUSDT", "TLMUSDT", "ATAUSDT", 
-    "LITUSDT", "STMXUSDT", "DODOUSDT", "PHAUSDT", "ALICEUSDT", "RUNEUSDT", "PERPUSDT", "LINAUSDT", 
-    "POLSUSDT", "AGLDUSDT", "LQTYUSDT", "IDUSDT", "RDNTUSDT", "SSVUSDT", "CFXUSDT", "STXUSDT", 
-    "ROSEUSDT", "RSRUSDT", "OGNUSDT", "POLYXUSDT", "LEVERUSDT", "SYSUSDT", "DGBUSDT", "ARDRUSDT", 
-    "HIVEUSDT", "CHRUSDT", "MDTUSDT", "ANKRUSDT", "CELOUSDT", "SPELLUSDT", "JOEUSDT", "SUNUSDT", 
-    "JSTUSDT", "STPTUSDT", "LDOUSDT", "OPUSDT", "APTUSDT", "SUIUSDT", "SEIUSDT", "TIAUSDT", 
-    "1000PEPEUSDT", "1000SHIBUSDT", "1000FLOKIUSDT", "1000BONKUSDT", "1000SATSUSDT", "1000RATSUSDT"
+# --- 2. إعدادات بينانس ---
+exchange = ccxt.binance({'options': {'defaultType': 'future'}, 'enableRateLimit': True})
+
+# --- 3. قائمة الـ 300 عملة (كاملة لضمان استمرار الفحص المرئي) ---
+MY_SYMBOLS = [
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
+    'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
+    'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT', 'HBAR/USDT', 'ALGO/USDT', 'FIL/USDT', 'ICP/USDT', 'GRT/USDT', 'STX/USDT',
+    'INJ/USDT', 'RNDR/USDT', 'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'THETA/USDT', 'EGLD/USDT', 'AAVE/USDT', 'UNI/USDT',
+    'SUSHI/USDT', 'DYDX/USDT', 'CRV/USDT', 'MKR/USDT', 'LDO/USDT', 'PENDLE/USDT', 'ENS/USDT', 'ID/USDT', 'MAV/USDT', 'EDU/USDT',
+    'GALA/USDT', 'ORDI/USDT', '1000SATS/USDT', 'BEAMX/USDT', 'PYTH/USDT', 'JUP/USDT', 'STRK/USDT', 'DYM/USDT', 'MANTA/USDT', 'ALT/USDT',
+    'ZETA/USDT', 'PIXEL/USDT', 'RONIN/USDT', 'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'IMX/USDT', 'FLOW/USDT', 'CHZ/USDT', 'ENJ/USDT',
+    'YGG/USDT', 'ILV/USDT', 'MAGIC/USDT', 'RUNE/USDT', 'KAS/USDT', 'TWT/USDT', 'GAS/USDT', 'NEO/USDT', 'QTUM/USDT', 'VET/USDT',
+    'CFX/USDT', 'KAVA/USDT', 'IOTA/USDT', 'ZIL/USDT', 'ONT/USDT', 'BAT/USDT', 'MASK/USDT', 'LRC/USDT', 'ANKR/USDT', 'LPT/USDT',
+    'BLUR/USDT', 'JOE/USDT', 'MINA/USDT', 'WOO/USDT', 'ASTR/USDT', 'GLMR/USDT', 'METIS/USDT', 'QNT/USDT', 'GMX/USDT', 'SNX/USDT',
+    '1INCH/USDT', 'ALICE/USDT', 'ALPHA/USDT', 'AMB/USDT', 'APE/USDT', 'API3/USDT', 'AR/USDT', 'ARK/USDT', 'ARKM/USDT', 'ARPA/USDT',
+    'ATA/USDT', 'ATOM/USDT', 'AUCTION/USDT', 'AUDIO/USDT', 'AXL/USDT', 'BAKE/USDT', 'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT',
+    'BIGTIME/USDT', 'BLZ/USDT', 'BNX/USDT', 'BSV/USDT', 'BSW/USDT', 'C98/USDT', 'CAKE/USDT', 'CELO/USDT', 'CELR/USDT', 'COMBO/USDT',
+    'COMP/USDT', 'COTI/USDT', 'CTK/USDT', 'CTSI/USDT', 'CVP/USDT', 'DAR/USDT', 'DASH/USDT', 'DATA/USDT', 'DENT/USDT', 'DGB/USDT',
+    'DOCK/USDT', 'DODO/USDT', 'DUSK/USDT', 'EPX/USDT', 'ERN/USDT', 'ETC/USDT', 'FLM/USDT', 'FRONT/USDT', 'FTM/USDT', 'FXS/USDT',
+    'GAL/USDT', 'GHST/USDT', 'GLM/USDT', 'GMT/USDT', 'GNO/USDT', 'GTC/USDT', 'HARD/USDT', 'HFT/USDT', 'HIGH/USDT', 'HOOK/USDT',
+    'HOT/USDT', 'ICX/USDT', 'IDEX/USDT', 'IOTX/USDT', 'KEY/USDT', 'KNC/USDT', 'KSM/USDT', 'LINA/USDT', 'LOOM/USDT', 'LQTY/USDT',
+    'LSK/USDT', 'LUNC/USDT', 'LUNA/USDT', 'MDT/USDT', 'MOVR/USDT', 'MTL/USDT', 'NKN/USDT', 'NMR/USDT', 'NTRN/USDT', 'NULS/USDT',
+    'OGN/USDT', 'OMG/USDT', 'ONG/USDT', 'OXT/USDT', 'PAXG/USDT', 'PERP/USDT', 'PHB/USDT', 'PIVX/USDT', 'POL/USDT', 'POLS/USDT',
+    'POWR/USDT', 'PROS/USDT', 'PSG/USDT', 'PUNDIX/USDT', 'PYR/USDT', 'QI/USDT', 'QUICK/USDT', 'RAD/USDT', 'RARE/USDT', 'RAY/USDT',
+    'REEF/USDT', 'REI/USDT', 'REN/USDT', 'REQ/USDT', 'RIF/USDT', 'RLC/USDT', 'ROSE/USDT', 'RSR/USDT', 'RSS3/USDT', 'RVN/USDT',
+    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'SPELL/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT',
+    'STPT/USDT', 'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT',
+    'UMA/USDT', 'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT',
+    'WAXP/USDT', 'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT',
+    'XWG/USDT', 'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT',
+    'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
 ]
 
-def check_symbol_tf(symbol):
-    # نركز على فريم 1m و 3m و 5m كما في صورتك
-    timeframes = ['1m', '3m', '5m']
-    for tf in timeframes:
-        try:
-            # نسحب آخر 15 شمعة لنفحص بدقة الشموع الأخيرة المغلقة
-            url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={tf}&limit=15"
-            res = requests.get(url, timeout=2)
-            if res.status_code != 200:
-                continue
+TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h']
 
-            raw_candles = res.json()
-            if len(raw_candles) < 5:
-                continue
+def check_logic(symbol, tf):
+    try:
+        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=6)
+        if len(bars) < 3: return False
+        for i in range(len(bars) - 2):
+            c1, c2 = bars[i], bars[i+1]
+            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
+            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
+            if cl1 < o1 and cl2 < o2:
+                b1, b2 = abs(o1-cl1), abs(o2-cl2)
+                u1, u2 = (h1-max(o1,cl1)), (h2-max(o2,cl2))
+                lt1, lt2 = (min(o1,cl1)-l1), (min(o2,cl2)-l2)
+                if b1 > (u1+lt1) and b2 > (u2+lt2) and lt1 > u1 and lt2 > u2 and cl2 < l1:
+                    return True
+        return False
+    except: return False
 
-            df = pd.DataFrame(raw_candles, columns=['time', 'open', 'high', 'low', 'close', 'vol', 'close_time', 'qav', 'num_trades', 'taker_base', 'taker_quote', 'ignore'])
-            
-            df['open'] = df['open'].astype(float)
-            df['high'] = df['high'].astype(float)
-            df['low'] = df['low'].astype(float)
-            df['close'] = df['close'].astype(float)
+print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.")
 
-            # نفحص الشموع من الخلف إلى الأمام
-            for i in range(len(df) - 1, 1, -1):
-                c1 = df.iloc[i - 1] # الشمعة الحمراء الكاسرة
-                c2 = df.iloc[i]     # الشمعة الخضراء المحتواة
-
-                # 1. الشمعة الأولى يجب أن تكون حمراء (إغلاق أقل من افتتاح)
-                is_c1_red = c1['close'] < c1['open']
-                if not is_c1_red:
-                    continue
-
-                # 2. الشمعة الثانية يجب أن تكون خضراء (إغلاق أعلى من افتتاح)
-                is_c2_green = c2['close'] > c2['open']
-                if not is_c2_green:
-                    continue
-
-                # 3. الشرط الأساسي: الشمعة الخضراء محتواة بالكامل داخل نطاق الشمعة الحمراء التي قبلها
-                # (قاع الخضراء >= قاع الحمراء، وقمتها <= قمة الحمراء)
-                is_fully_inside = (c2['low'] >= c1['low']) and (c2['high'] <= c1['high'])
-
-                if is_fully_inside:
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    print("\n" + "🔥"*30, flush=True)
-                    print(f"🚨 [تم رصد النموذج بدقة] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
-                    print(f"   📊 الحمراء [Low: {c1['low']}, High: {c1['high']}] | الخضراء المحتواة [Low: {c2['low']}, High: {c2['high']}]", flush=True)
-                    print("🔥"*30 + "\n", flush=True)
-                    return
-
-        except Exception:
-            pass
-
-def run_radar_loop():
-    print(f"🚀 بدء التشغيل بالدقة المطلوبة للمستطيل ({len(ALL_FUTURES_SYMBOLS)} عملة)...", flush=True)
-    while True:
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            executor.map(check_symbol_tf, ALL_FUTURES_SYMBOLS)
+while True:
+    try:
+        for index, symbol in enumerate(MY_SYMBOLS, 1):
+            # طباعة فورية ومستمرة لكل عملة لضمان بقاء الـ Logs نشطة
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] ({index}/{len(MY_SYMBOLS)}) Scanning: {symbol}", flush=True)
+            for tf in TIMEFRAMES:
+                if check_logic(symbol, tf):
+                    print(f"🎯 ALERT: {symbol} | TF: {tf}", flush=True)
+            time.sleep(0.02) # سرعة الفحص
+        
+        print("--- Cycle Finished. Restarting Now ---", flush=True)
         time.sleep(5)
-
-threading.Thread(target=run_radar_loop, daemon=True).start()
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    except Exception as e:
+        print(f"Error: {e}", flush=True)
+        time.sleep(20)
