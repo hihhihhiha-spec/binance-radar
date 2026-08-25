@@ -22,11 +22,11 @@ def health():
 candle_data = {}
 
 def get_all_futures_symbols():
-    """جلب جميع أزواج USDT النشطة من الفيوتشرز بنسبة 100%"""
+    """جلب جميع أزواج USDT النشطة من الفيوتشرز"""
     try:
         url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode())
             symbols = [
                 s['symbol'].lower() for s in data['symbols'] 
@@ -40,10 +40,10 @@ def get_all_futures_symbols():
 
 def check_pattern_strict(df):
     """
-    فحص الشرط بدقة متناهية:
-    c1: الأولى المرجعية
-    c2: الحمراء (تكسر ذيل الأولى، جسمها أكبر)
-    c3: الخضراء (بأكملها شاملة الأذيال داخل نطاق الشمعة الحمراء)
+    فحص الشروط بدقة:
+    c1: الشمعة الأولى המرجعية
+    c2: الشمعة الحمراء (تكسر ذيل الأولى، جسمها أكبر)
+    c3: الشمعة الخضراء (كامل الشمعة بالأذيال والجسم داخل نطاق الشمعة الحمراء)
     """
     try:
         if df is None or len(df) < 3:
@@ -63,10 +63,7 @@ def check_pattern_strict(df):
         c2_body = abs(c2['open'] - c2['close'])
         c1_body = abs(c1['open'] - c1['close'])
 
-        # أ) جسم الحمراء أكبر من جسم الشمعة المرجعية
         is_body_bigger = c2_body > c1_body
-
-        # ب) إغلاق الحمراء يكسر أدنى سعر (Low) للشمعة المرجعية
         breaks_c1_low = c2['close'] < c1['low']
 
         if not (is_body_bigger and breaks_c1_low):
@@ -79,7 +76,7 @@ def check_pattern_strict(df):
         if not is_c3_green:
             return False
 
-        # أ) الشمعة الخضراء بالكامل (بأذيالها وجسمها) تتواجد داخل نطاق الشمعة الحمراء بالكامل
+        # الخضراء بالكامل (أعلى ذيل وأدنى ذيل) داخل نطاق الحمراء بالكامل
         is_fully_inside_red = (c3['low'] >= c2['low']) and (c3['high'] <= c2['high'])
 
         return is_fully_inside_red
@@ -134,7 +131,6 @@ def on_close(ws, close_status_code, close_msg):
     time.sleep(5)
 
 def run_ws_chunk(streams_chunk):
-    """فتح اتصال WebSocket لكل مجموعة قنوات دون تجاوز حدود بينانس"""
     streams_url = "/".join(streams_chunk)
     url = f"wss://fstream.binance.com/stream?streams={streams_url}"
     
@@ -154,8 +150,7 @@ def start_futures_radar():
 
     print(f"🚀 جاري بدء الاستماع المباشر لـ {len(all_streams)} قناة بث للفيوتشرز...", flush=True)
 
-    # تقسيم القنوات إلى مجموعات (500 قناة لكل اتصال) لتجنب حد بينانس (1024)
-    chunk_size = 500
+    chunk_size = 400
     for i in range(0, len(all_streams), chunk_size):
         chunk = all_streams[i:i + chunk_size]
         t = threading.Thread(target=run_ws_chunk, args=(chunk,))
@@ -163,9 +158,11 @@ def start_futures_radar():
         t.start()
         time.sleep(1)
 
-    print("✅ تم توزيع واستقبال البث الحي لجميع عملات الفيوتشرز بنجاح!", flush=True)
+    print("✅ تم توزيع البث المباشر لجميع العملات على خيوط العمل (Threads) بنجاح!", flush=True)
+
+# تشغيل الرادار في Thread مستقل عند بدء التطبيق
+threading.Thread(target=start_futures_radar, daemon=True).start()
 
 if __name__ == "__main__":
-    start_futures_radar()
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
