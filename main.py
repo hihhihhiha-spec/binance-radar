@@ -71,12 +71,10 @@ TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
 def check_logic(symbol, tf):
     try:
-        # جلب آخر 7 شموع لنتمكن من فحص نطاق الـ 6 شموع الأخيرة براحة
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=7)
         if len(bars) < 6: 
             return False
         
-        # فحص آخر 6 شموع بحثاً عن النموذج في أي مكان داخلها
         for i in range(len(bars) - 2):
             c1, c2, c3 = bars[i], bars[i+1], bars[i+2]
             
@@ -84,16 +82,16 @@ def check_logic(symbol, tf):
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             
-            # 1. الشمعة الأولى حمراء
             is_red_1 = cl1 < o1
-            
-            # 2. الشمعة الثانية حمراء + جسمها أكبر من ذيلها السفلي العادي
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
             lower_wick2 = min(o2, cl2) - l2
             cond_candle_2 = (is_red_2 and body2 > 0 and body2 > lower_wick2)
             
-            # 3. الشمعة الثالثة خضراء + جسمها بالكامل داخل جسم الشمعة الثانية
+            # طباعة توضيحية إذا تطابقت الشمعة الأولى والثانية لمعرفة هل البوت يراها
+            if is_red_1 and cond_candle_2:
+                print(f"[{symbol}][{tf}] Found Pattern C1 & C2 match, checking C3...", flush=True)
+
             is_green_3 = cl3 > o3
             body2_top = max(o2, cl2)
             body2_bottom = min(o2, cl2)
@@ -109,13 +107,12 @@ def check_logic(symbol, tf):
     except: 
         return False
 
-print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تحديث الرادار ليفحص آخر 6 شموع ولن تفوته أي إشارة مكتملة!")
+print(f"🚀 Radar Started with Debug Logging: {len(MY_SYMBOLS)} symbols.", flush=True)
+send_telegram_message("🚀 تم تفعيل وضع المراقبة في السجلات للتاكد من فحص النماذج بدقة.")
 
 while True:
     try:
         for index, symbol in enumerate(MY_SYMBOLS, 1):
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] ({index}/{len(MY_SYMBOLS)}) Scanning: {symbol}", flush=True)
             for tf in TIMEFRAMES:
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
