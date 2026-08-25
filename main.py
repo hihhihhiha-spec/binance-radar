@@ -71,43 +71,46 @@ TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
 def check_logic(symbol, tf):
     try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
-        if len(bars) < 3: 
+        # جلب آخر 7 شموع لنتمكن من فحص نطاق الـ 6 شموع الأخيرة براحة
+        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=7)
+        if len(bars) < 6: 
             return False
         
-        c1, c2, c3 = bars[-3], bars[-2], bars[-1]
-        
-        o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-        o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-        o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
-        
-        # 1. الشمعة الأولى حمراء
-        is_red_1 = cl1 < o1
-        
-        # 2. الشمعة الثانية حمراء + جسمها أكبر من ذيلها السفلي العادي
-        is_red_2 = cl2 < o2
-        body2 = abs(o2 - cl2)
-        lower_wick2 = min(o2, cl2) - l2
-        cond_candle_2 = (is_red_2 and body2 > 0 and body2 > lower_wick2)
-        
-        # 3. الشمعة الثالثة خضراء + جسمها بالكامل داخل جسم الشمعة الثانية
-        is_green_3 = cl3 > o3
-        body2_top = max(o2, cl2)
-        body2_bottom = min(o2, cl2)
-        body3_top = max(o3, cl3)
-        body3_bottom = min(o3, cl3)
-        
-        is_inside_body = (is_green_3 and body3_top <= body2_top and body3_bottom >= body2_bottom)
-        
-        if is_red_1 and cond_candle_2 and is_inside_body:
-            return True
+        # فحص آخر 6 شموع بحثاً عن النموذج في أي مكان داخلها
+        for i in range(len(bars) - 2):
+            c1, c2, c3 = bars[i], bars[i+1], bars[i+2]
             
+            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
+            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
+            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
+            
+            # 1. الشمعة الأولى حمراء
+            is_red_1 = cl1 < o1
+            
+            # 2. الشمعة الثانية حمراء + جسمها أكبر من ذيلها السفلي العادي
+            is_red_2 = cl2 < o2
+            body2 = abs(o2 - cl2)
+            lower_wick2 = min(o2, cl2) - l2
+            cond_candle_2 = (is_red_2 and body2 > 0 and body2 > lower_wick2)
+            
+            # 3. الشمعة الثالثة خضراء + جسمها بالكامل داخل جسم الشمعة الثانية
+            is_green_3 = cl3 > o3
+            body2_top = max(o2, cl2)
+            body2_bottom = min(o2, cl2)
+            body3_top = max(o3, cl3)
+            body3_bottom = min(o3, cl3)
+            
+            is_inside_body = (is_green_3 and body3_top <= body2_top and body3_bottom >= body2_bottom)
+            
+            if is_red_1 and cond_candle_2 and is_inside_body:
+                return True
+                
         return False
     except: 
         return False
 
 print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تعديل الشرط: الشمعة الثانية أصبح جسمها أكبر من ذيلها السفلي العادي!")
+send_telegram_message("🚀 تم تحديث الرادار ليفحص آخر 6 شموع ولن تفوته أي إشارة مكتملة!")
 
 while True:
     try:
