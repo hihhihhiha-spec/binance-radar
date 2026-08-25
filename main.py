@@ -22,7 +22,7 @@ def health():
 candle_data = {}
 
 def get_all_futures_symbols():
-    """جلب قائمة عملات الفيوتشرز"""
+    """جلب قائمة عملات الفيوتشرز عبر المصادر المتوافقة مع Render"""
     try:
         url = "https://data-api.binance.vision/api/v3/exchangeInfo"
         req = requests.get(url, timeout=10)
@@ -57,27 +57,6 @@ def get_all_futures_symbols():
         pass
 
     return ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", "avaxusdt"]
-
-def fetch_historical_candles(symbol, tf):
-    """جلب آخر 5 شموع مباشرة فور إقلاع السيرفر لتعبئة الذاكرة فوراً"""
-    try:
-        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={tf}&limit=5"
-        res = requests.get(url, timeout=3)
-        if res.status_code == 200:
-            raw_candles = res.json()
-            candles = []
-            # الشموع التاريخية المغلقة (تجاهل الشمعة الحالية غير المغلقة)
-            for c in raw_candles[:-1]: 
-                candles.append({
-                    'open': float(c[1]),
-                    'high': float(c[2]),
-                    'low': float(c[3]),
-                    'close': float(c[4])
-                })
-            return candles
-    except Exception:
-        pass
-    return []
 
 def check_pattern_strict(df):
     """
@@ -125,17 +104,12 @@ def process_kline(kline):
     tf = kline['i']
     is_closed = kline['x']
 
+    key = f"{symbol}_{tf}"
+    if key not in candle_data:
+        candle_data[key] = []
+
+    # مع كل شمعة مغلقة، يتم إضافتها للمخزن المحلي
     if is_closed:
-        key = f"{symbol}_{tf}"
-        if key not in candle_data or len(candle_data[key]) < 2:
-            # إذا لم تكن مجهزة، اطلب الشموع التاريخية فوراً
-            hist = fetch_historical_candles(symbol, tf)
-            if hist:
-                candle_data[key] = hist
-
-        if key not in candle_data:
-            candle_data[key] = []
-
         candle_data[key].append({
             'open': float(kline['o']),
             'high': float(kline['h']),
@@ -146,9 +120,11 @@ def process_kline(kline):
         if len(candle_data[key]) > 5:
             candle_data[key].pop(0)
 
-        if len(candle_data[key]) >= 3:
+        # طباعة تأكيدية فورية لإثبات استقبال واختبار الإغلاقات
+        if len(candle_data[key]) < 3:
+            print(f"⏳ [جاري تجميع الشموع]: {symbol.upper()} ({tf}) - الشمعة {len(candle_data[key])}/3", flush=True)
+        else:
             df = pd.DataFrame(candle_data[key])
-            
             if check_pattern_strict(df):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print("\n" + "🔥"*30, flush=True)
@@ -156,7 +132,7 @@ def process_kline(kline):
                 print(f"   📊 إغلاق الخضراء: {kline['c']} | محتواة بالكامل داخل الحمراء [Low: {df.iloc[-2]['low']}, High: {df.iloc[-2]['high']}]", flush=True)
                 print("🔥"*30 + "\n", flush=True)
             else:
-                print(f"🔍 [تم الفحص]: {symbol.upper()} ({tf}) - إغلاق شمعة (غير متطابق)", flush=True)
+                print(f"🔍 [تم الفحص]: {symbol.upper()} ({tf}) - غير متطابق", flush=True)
 
 def on_message(ws, message):
     try:
@@ -204,6 +180,7 @@ def start_futures_radar():
 
     print("✅ تم توزيع البث المباشر لجميع عملات الفيوتشرز بنجاح!", flush=True)
 
+# تشغيل البث في Thread منفصل
 threading.Thread(target=start_futures_radar, daemon=True).start()
 
 if __name__ == "__main__":
