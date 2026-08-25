@@ -8,21 +8,22 @@ import pandas as pd
 from datetime import datetime
 from flask import Flask
 
+# 1. إنشاء تطبيق Flask لبيئة Render
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Futures Full Radar is Live 24/7!", 200
+    return "Binance Futures Full Radar is Active 24/7!", 200
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-# مخزن بيانات الشموع
+# مخزن لحفظ الشموع الأخيرة
 candle_data = {}
 
 def get_all_futures_symbols():
-    """جلب جميع أزواج USDT النشطة من الفيوتشرز"""
+    """جلب جميع أزواج USDT النشطة من العقود الآجلة (Futures)"""
     try:
         url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -35,15 +36,15 @@ def get_all_futures_symbols():
             print(f"✅ تم جلب جميع عملات الفيوتشرز: {len(symbols)} عملة بنجاح!", flush=True)
             return symbols
     except Exception as e:
-        print(f"⚠️ خطأ في جلب القائمة، جاري استخدام القائمة الطارئة: {e}", flush=True)
+        print(f"⚠️ تعذر جلب القائمة الكلية، استخدام القائمة الاحتياطية: {e}", flush=True)
         return ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", "avaxusdt"]
 
 def check_pattern_strict(df):
     """
-    فحص الشروط بدقة:
+    فحص الشروط المحددة بدقة:
     c1: الشمعة الأولى המرجعية
-    c2: الشمعة الحمراء (تكسر ذيل الأولى، جسمها أكبر)
-    c3: الشمعة الخضراء (كامل الشمعة بالأذيال والجسم داخل نطاق الشمعة الحمراء)
+    c2: الشمعة الحمراء (تكسر ذيل c1 وجسمها أكبر من c1)
+    c3: الشمعة الخضراء (بالكامل شاملاً الأذيال والجسم داخل نطاق c2)
     """
     try:
         if df is None or len(df) < 3:
@@ -63,7 +64,10 @@ def check_pattern_strict(df):
         c2_body = abs(c2['open'] - c2['close'])
         c1_body = abs(c1['open'] - c1['close'])
 
+        # أ) جسم الحمراء أكبر من جسم الشمعة المرجعية
         is_body_bigger = c2_body > c1_body
+
+        # ب) إغلاق الحمراء يكسر أدنى قاع/ذيل للشمعة المرجعية
         breaks_c1_low = c2['close'] < c1['low']
 
         if not (is_body_bigger and breaks_c1_low):
@@ -76,7 +80,7 @@ def check_pattern_strict(df):
         if not is_c3_green:
             return False
 
-        # الخضراء بالكامل (أعلى ذيل وأدنى ذيل) داخل نطاق الحمراء بالكامل
+        # أ) الخضراء بكاملها (أعلى سعر وأدنى سعر) تتواجد داخل نطاق الحمراء الكامل
         is_fully_inside_red = (c3['low'] >= c2['low']) and (c3['high'] <= c2['high'])
 
         return is_fully_inside_red
@@ -110,9 +114,12 @@ def process_kline(kline):
             if check_pattern_strict(df):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print("\n" + "🔥"*30, flush=True)
-                print(f"🚨 [رصد فيوتشرز مؤكد] | العملة: {symbol} | الفريم: {tf} | الوقت: {now}", flush=True)
-                print(f"   📊 إغلاق الخضراء: {kline['c']} | داخل نطاق الحمراء بالكامل [Low: {df.iloc[-2]['low']}, High: {df.iloc[-2]['high']}]", flush=True)
+                print(f"🚨 [رصد فيوتشرز مؤكد] | العملة: {symbol.upper()} | الفريم: {tf} | الوقت: {now}", flush=True)
+                print(f"   📊 إغلاق الخضراء: {kline['c']} | محتواة بالكامل داخل الحمراء [Low: {df.iloc[-2]['low']}, High: {df.iloc[-2]['high']}]", flush=True)
                 print("🔥"*30 + "\n", flush=True)
+            else:
+                # طباعة تأكيدية بأن الفحص جاري ولم تتطابق الشروط
+                print(f"🔍 [فحص مغلق]: {symbol.upper()} ({tf}) - غير متطابق", flush=True)
 
 def on_message(ws, message):
     try:
@@ -158,9 +165,9 @@ def start_futures_radar():
         t.start()
         time.sleep(1)
 
-    print("✅ تم توزيع البث المباشر لجميع العملات على خيوط العمل (Threads) بنجاح!", flush=True)
+    print("✅ تم توزيع البث المباشر لجميع عملات الفيوتشرز بنجاح!", flush=True)
 
-# تشغيل الرادار في Thread مستقل عند بدء التطبيق
+# تشغيل البث في Thread منفصل مع بداية إقلاع التطبيق
 threading.Thread(target=start_futures_radar, daemon=True).start()
 
 if __name__ == "__main__":
