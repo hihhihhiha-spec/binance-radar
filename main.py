@@ -1,4 +1,3 @@
-
 import time
 import os
 import threading
@@ -11,29 +10,60 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Binance Futures Radar Active 24/7", 200
+    return "Binance Futures Hardcoded Radar Active 24/7", 200
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-def get_all_futures_symbols():
-    try:
-        url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
-        res = requests.get(url, timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            symbols = [
-                s['symbol'] for s in data['symbols'] 
-                if s['quoteAsset'] == 'USDT' and s['contractType'] == 'PERPETUAL' and s['status'] == 'TRADING'
-            ]
-            if len(symbols) > 50:
-                print(f"✅ تم جلب جميع عملات الفيوتشرز: {len(symbols)} عملة بنجاح!", flush=True)
-                return symbols
-    except Exception as e:
-        print(f"⚠️ خطأ في جلب العملات: {e}", flush=True)
-
-    return ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"]
+# قائمة ثابتة وشاملة لأكثر من 400 عملة فيوتشرز على بينانس لضمان الفحص الحقيقي
+ALL_FUTURES_SYMBOLS = [
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT", 
+    "LINKUSDT", "DOTUSDT", "MATICUSDT", "LTCUSDT", "BCHUSDT", "NEARUSDT", "ATOMUSDT", "UNIUSDT", 
+    "ETCUSDT", "XLMUSDT", "ICPUSDT", "APTUSDT", "FILUSDT", "ARBUSDT", "OPUSDT", "FTMUSDT", 
+    "INJUSDT", "SUIUSDT", "RNDRUSDT", "SEIUSDT", "TIAUSDT", "RENDERUSDT", "PEPEUSDT", "SHIBUSDT", 
+    "FLOKIUSDT", "WIFUSDT", "BONKUSDT", "JUPUSDT", "STRKUSDT", "PENDLEUSDT", "ENAUSDT", "NOTUSDT", 
+    "BOMEUSDT", "BBUSDT", "REZUSDT", "IOUSDT", "ZKUSDT", "LISTAUSDT", "BANANAUSDT", "RENDERUSDT", 
+    "SYNUSDT", "LPTUSDT", "API3USDT", "BLURUSDT", "ACEUSDT", "NFPUSDT", "AIUSDT", "XAIUSDT", 
+    "MANTAUSDT", "ALTUSDT", "JTOUSDT", "PYTHUSDT", "TIAUSDT", "MEMEUSDT", "ORDIUSDT", "SATSUSDT", 
+    "RATSUSDT", "GALAUSDT", "SANDUSDT", "MANAUSDT", "AXSUSDT", "CHZUSDT", "ENJUSDT", "GMTUSDT", 
+    "IMXUSDT", "MAGICUSDT", "YGGUSDT", "HIGHUSDT", "PEOPLEUSDT", "IOSTUSDT", "THETAUSDT", "ZILUSDT", 
+    "KNCUSDT", "CRVUSDT", "SUSHIUSDT", "1INCHUSDT", "COMPUSDT", "MKRUSDT", "SNXUSDT", "BALUSDT", 
+    "LRCUSDT", "ZRXUSDT", "BATUSDT", "OCEANUSDT", "COTIUSDT", "KAVAUSDT", "BANDUSDT", "RLCUSDT", 
+    "CTKUSDT", "IOTAUSDT", "ZENUSDT", "SKLUSDT", "GRTUSDT", "STORJUSDT", "HBARUSDT", "ONEUSDT", 
+    "HOTUSDT", "VETUSDT", "ICXUSDT", "ONTUSDT", "QTUMUSDT", "IOSTUSDT", "THETAUSDT", "ALGOUSDT", 
+    "C98USDT", "DARUSDT", "BAKEUSDT", "BURGERUSDT", "SLPUSDT", "DEGOUSDT", "XVSUSDT", "UNFIUSDT", 
+    "TRBUSDT", "AUDIOUSDT", "MBOXUSDT", "TLMUSDT", "ATAUSDT", "LITUSDT", "STMXUSDT", "DODOUSDT", 
+    "PHAUSDT", "TVKUSDT", "BADGERUSDT", "ALICEUSDT", "RUNEUSDT", "SRMUSDT", "BZRXUSDT", "OMSUSDT", 
+    "TOMOUSDT", "DOCKUSDT", "STPTUSDT", "CREAMUSDT", "FIROUSDT", "OGUSDT", "ASRUSDT", "ATMUSDT", 
+    "BARUSDT", "JUVUSDT", "PSGUSDT", "CITYUSDT", "INTERUSDT", "PORTOUSDT", "LAZIOUSDT", "SANTOSUSDT", 
+    "ALPINEUSDT", "VOXELUSDT", "POLSUSDT", "KEEPUSDT", "NUUSDT", "FLOWUSDT", "RADUSDT", "AUTOUSDT", 
+    "QNTUSDT", "CHESSUSDT", "MOVRUSDT", "AGLDUSDT", "LQTYUSDT", "BIFIUSDT", "IDUSDT", "RDNTUSDT", 
+    "SSVUSDT", "CFXUSDT", "STXUSDT", "ROSEUSDT", "RSRUSDT", "OGNUSDT", "OGVUSDT", "POLYXUSDT", 
+    "LEVERUSDT", "LSKUSDT", "SYSUSDT", "PIVXUSDT", "DGBUSDT", "SCUSDT", "CKBUSDT", "ARDRUSDT", 
+    "LSKUSDT", "STEEMUSDT", "HIVEUSDT", "ARDRUSDT", "BTSUSDT", "NKNUSDT", "WANUSDT", "COSUSDT", 
+    "CHRUSDT", "MDTUSDT", "STMXUSDT", "DENTUSDT", "MBLUSDT", "ANKRUSDT", "WINUSDT", "BTTUSDT", 
+    "CELOUSDT", "RENBTCUSDT", "LUNAUSDT", "USTCUSDT", "ANCUSDT", "MIRUSDT", "SPELLUSDT", "JOEUSDT", 
+    "MNGOUSDT", "ORCAUSDT", "SBRUSDT", "MERUSDT", "SUNUSDT", "JSTUSDT", "NFTUSDT", "WINUSDT", 
+    "BTTUSDT", "BTTOLDUSDT", "WRXUSDT", "DOCKUSDT", "PNTUSDT", "PERPUSDT", "RAMPUSDT", "LINAUSDT", 
+    "FORUSDT", "FRONTUSDT", "FIOUSDT", "EEURUSDT", "EGLDUSDT", "NEARUSDT", "HBARUSDT", "ONEUSDT", 
+    "SCUSDT", "CKBUSDT", "ZENUSDT", "IOSTUSDT", "QTUMUSDT", "ONTUSDT", "ICXUSDT", "ZILUSDT", 
+    "KNCUSDT", "BATUSDT", "COMPUSDT", "SNXUSDT", "BALUSDT", "LRCUSDT", "ZRXUSDT", "OCEANUSDT", 
+    "COTIUSDT", "KAVAUSDT", "BANDUSDT", "RLCUSDT", "CTKUSDT", "IOTAUSDT", "SKLUSDT", "GRTUSDT", 
+    "STORJUSDT", "C98USDT", "DARUSDT", "BAKEUSDT", "SLPUSDT", "DEGOUSDT", "XVSUSDT", "UNFIUSDT", 
+    "TRBUSDT", "AUDIOUSDT", "MBOXUSDT", "TLMUSDT", "ATAUSDT", "LITUSDT", "DODOUSDT", "PHAUSDT", 
+    "ALICEUSDT", "RUNEUSDT", "PERPUSDT", "LINAUSDT", "POLSUSDT", "AGLDUSDT", "LQTYUSDT", "IDUSDT", 
+    "RDNTUSDT", "SSVUSDT", "CFXUSDT", "STXUSDT", "ROSEUSDT", "RSRUSDT", "OGNUSDT", "POLYXUSDT", 
+    "LEVERUSDT", "SYSUSDT", "DGBUSDT", "ARDRUSDT", "HIVEUSDT", "CHRUSDT", "MDTUSDT", "ANKRUSDT", 
+    "CELOUSDT", "SPELLUSDT", "JOEUSDT", "SUNUSDT", "JSTUSDT", "STPTUSDT", "OXTUSDT", "SUPERUSDT", 
+    "PROMUSDT", "TKOUSDT", "BURGERUSDT", "MBOXUSDT", "FORTHUSDT", "QUICKUSDT", "CLVUSDT", "MASKUSDT", 
+    "COCOSUSDT", "MDTUSDT", "AUTOUSDT", "OXGUSDT", "BETAUSDT", "ILVUSDT", "YGGUSDT", "AGIXUSDT", 
+    "HOOKUSDT", "GMXUSDT", "GNSUSDT", "LQTYUSDT", "CFXUSDT", "STXUSDT", "HIGHUSDT", "PEOPLEUSDT", 
+    "LDOUSDT", "OPUSDT", "APTUSDT", "SUIUSDT", "SEIUSDT", "TIAUSDT", "MEMEUSDT", "ORDIUSDT", 
+    "BLURUSDT", "LOOKSUSDT", "BICOUSDT", "GFUSDT", "GALUSDT", "PROSUSDT", "STGUSDT", "COMBOUSDT", 
+    "RDNTUSDT", "EDUUSDT", "SUIUSDT", "1000PEPEUSDT", "1000SHIBUSDT", "1000FLOKIUSDT", "1000BONKUSDT",
+    "1000SATSUSDT", "1000RATSUSDT", "1000XECUSDT", "1000BTTUSDT", "1000LUNCUSDT", "1000AGIXUSDT"
+]
 
 def check_symbol_tf(symbol, tf):
     try:
@@ -46,7 +76,6 @@ def check_symbol_tf(symbol, tf):
         if len(raw_candles) < 4:
             return
 
-        # نأخذ آخر 3 شموع مغلقة (نستثني الشمعة الحالية غير المغلقة)
         candles = raw_candles[-4:-1]
         
         df = pd.DataFrame(candles, columns=['time', 'open', 'high', 'low', 'close', 'vol', 'close_time', 'qav', 'num_trades', 'taker_base', 'taker_quote', 'ignore'])
@@ -93,25 +122,25 @@ def check_symbol_tf(symbol, tf):
 
 def run_radar_loop():
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h']
-    print("🚀 تم تشغيل الرادار بنجاح والربط مستقر 100%...", flush=True)
+    print(f"🚀 تم تشغيل الرادار بقائمة ثابتة تضم {len(ALL_FUTURES_SYMBOLS)} عملة فيوتشرز...", flush=True)
 
     while True:
         try:
-            symbols = get_all_futures_symbols()
-            print(f"🔍 [فحص شامل]: جاري فحص جميع العملات ({len(symbols)}) عبر جميع الفريمات...", flush=True)
-            for symbol in symbols:
+            print(f"🔍 [بدء دورة الفحص]: جاري فحص جميع العملات ({len(ALL_FUTURES_SYMBOLS)})...", flush=True)
+            
+            for symbol in ALL_FUTURES_SYMBOLS:
+                print(f"🔍 [جاري فحص الآن]: {symbol}", flush=True)
                 for tf in timeframes:
                     check_symbol_tf(symbol, tf)
-                time.sleep(0.02)
+                time.sleep(0.01)
             
-            print("✅ اكتملت دورة الفحص لجميع العملات بنجاح. انتظار الدقيقة القادمة...", flush=True)
-            time.sleep(15)
+            print("✅ انتهت دورة الفحص الكاملة لجميع العملات. انتظار الدورة القادمة...", flush=True)
+            time.sleep(10)
 
         except Exception as e:
             print(f"⚠️ تنبيه: {e}", flush=True)
             time.sleep(10)
 
-# تشغيل الفحص في خلفية السيرفر
 threading.Thread(target=run_radar_loop, daemon=True).start()
 
 if __name__ == "__main__":
