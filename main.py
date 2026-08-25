@@ -2,7 +2,7 @@ import time
 import json
 import os
 import threading
-import urllib.request
+import requests
 import websocket
 import pandas as pd
 from datetime import datetime
@@ -18,16 +18,16 @@ def home():
 def health():
     return "OK", 200
 
+# ذاكرة الشموع
 candle_data = {}
 
 def get_all_futures_symbols():
-    """جلب جميع أزواج USDT النشطة للفيوتشرز عبر مصادر بديلة مجانية متوافقة مع Render"""
-    # المصدر 1: Binance Vision API
+    """جلب قائمة عملات الفيوتشرز"""
     try:
         url = "https://data-api.binance.vision/api/v3/exchangeInfo"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
+        req = requests.get(url, timeout=10)
+        if req.status_code == 200:
+            data = req.json()
             symbols = [
                 s['symbol'].lower() for s in data['symbols'] 
                 if s['quoteAsset'] == 'USDT' and s['status'] == 'TRADING'
@@ -38,12 +38,11 @@ def get_all_futures_symbols():
     except Exception:
         pass
 
-    # المصدر 2: Coingecko API لرموز الفيوتشرز
     try:
         url = "https://api.coingecko.com/api/v3/derivatives/exchanges/binance_futures"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
+        req = requests.get(url, timeout=10)
+        if req.status_code == 200:
+            data = req.json()
             symbols = []
             for item in data.get('tickers', []):
                 if item.get('target') == 'USDT':
@@ -52,20 +51,33 @@ def get_all_futures_symbols():
                         symbols.append(s)
             symbols = list(set(symbols))
             if len(symbols) > 50:
-                print(f"✅ تم جلب قائمة العملات بنجاح عبر Coingecko: {len(symbols)} عملة!", flush=True)
+                print(f"✅ تم جلب القائمة عبر Coingecko: {len(symbols)} عملة!", flush=True)
                 return symbols
     except Exception:
         pass
 
-    # قائمة احتياطية موسعة شاملة لأهم عملات الفيوتشرز
-    print("⚠️ استخدام القائمة الموسعة الشاملة لعملات الفيوتشرز...", flush=True)
-    return [
-        "btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", "avaxusdt",
-        "linkusdt", "nearusdt", "suiusdt", "aptusdt", "rdntusdt", "fetusdt", "injusdt", "wifusdt",
-        "pepeusdt", "flokiusdt", "shibusdt", "renderusdt", "arbusdt", "opusdt", "ldousdt", "tiausdt",
-        "seiusdt", "agixusdt", "arkmusdt", "galausdt", "sandusdt", "manausdt", "gmxusdt", "blurusdt",
-        "stxusdt", "filusdt", "ltcusdt", "trxusdt", "dotusdt", "maticusdt", "atomusdt", "etcusdt"
-    ]
+    return ["btcusdt", "ethusdt", "solusdt", "bnbusdt", "xrpusdt", "adausdt", "dogeusdt", "avaxusdt"]
+
+def fetch_historical_candles(symbol, tf):
+    """جلب آخر 5 شموع مباشرة فور إقلاع السيرفر لتعبئة الذاكرة فوراً"""
+    try:
+        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={tf}&limit=5"
+        res = requests.get(url, timeout=3)
+        if res.status_code == 200:
+            raw_candles = res.json()
+            candles = []
+            # الشموع التاريخية المغلقة (تجاهل الشمعة الحالية غير المغلقة)
+            for c in raw_candles[:-1]: 
+                candles.append({
+                    'open': float(c[1]),
+                    'high': float(c[2]),
+                    'low': float(c[3]),
+                    'close': float(c[4])
+                })
+            return candles
+    except Exception:
+        pass
+    return []
 
 def check_pattern_strict(df):
     """
@@ -115,6 +127,12 @@ def process_kline(kline):
 
     if is_closed:
         key = f"{symbol}_{tf}"
+        if key not in candle_data or len(candle_data[key]) < 2:
+            # إذا لم تكن مجهزة، اطلب الشموع التاريخية فوراً
+            hist = fetch_historical_candles(symbol, tf)
+            if hist:
+                candle_data[key] = hist
+
         if key not in candle_data:
             candle_data[key] = []
 
@@ -138,7 +156,7 @@ def process_kline(kline):
                 print(f"   📊 إغلاق الخضراء: {kline['c']} | محتواة بالكامل داخل الحمراء [Low: {df.iloc[-2]['low']}, High: {df.iloc[-2]['high']}]", flush=True)
                 print("🔥"*30 + "\n", flush=True)
             else:
-                print(f"🔍 [فحص مغلق]: {symbol.upper()} ({tf}) - غير متطابق", flush=True)
+                print(f"🔍 [تم الفحص]: {symbol.upper()} ({tf}) - إغلاق شمعة (غير متطابق)", flush=True)
 
 def on_message(ws, message):
     try:
@@ -186,7 +204,6 @@ def start_futures_radar():
 
     print("✅ تم توزيع البث المباشر لجميع عملات الفيوتشرز بنجاح!", flush=True)
 
-# تشغيل البث في Thread منفصل
 threading.Thread(target=start_futures_radar, daemon=True).start()
 
 if __name__ == "__main__":
