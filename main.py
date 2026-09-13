@@ -6,7 +6,7 @@ import requests
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- إعدادات تيليجرام (مجهزة بالبيانات الخاصة بك) ---
+# --- إعدادات تيليجرام ---
 TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
 CHAT_ID = "6141474899"
 
@@ -18,7 +18,7 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram Send Error: {e}", flush=True)
 
-# --- 1. حل مشكلة توقف Render (يمنع السيرفر من النوم) ---
+# --- 1. حل مشكلة توقف Render ---
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -39,7 +39,7 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# --- 3. قائمة الـ 300 عملة ---
+# --- 3. قائمة العملات ---
 MY_SYMBOLS = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
     'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
@@ -72,7 +72,6 @@ MY_SYMBOLS = [
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
-# ذاكرة لمنع تكرار الإرسال لنفس العملة والفريم
 sent_alerts = {}
 
 def check_logic(symbol, tf):
@@ -84,39 +83,75 @@ def check_logic(symbol, tf):
         for i in range(len(bars) - 4):
             c1, c2, c3, c4, c5 = bars[i], bars[i+1], bars[i+2], bars[i+3], bars[i+4]
             
-            # 1. شمعتان حمراوان (الأولى حمراء، والثانية حمراء أكبر حجماً ولها ذيل سفلي)
+            # --- تفكيك الشمعة 1 ---
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
-            
+            lower_wick1 = min(o1, cl1) - l1
+
+            # --- تفكيك الشمعة 2 ---
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
             lower_wick2 = min(o2, cl2) - l2
+            range2 = h2 - l2
             
-            cond_reds = is_red_1 and is_red_2 and (body2 > body1) and (lower_wick2 > 0)
-            
-            # 2. الشمعة الثالثة: خضراء ممتلئة وداخل الشمعة الحمراء الثانية بالكامل
+            # الشرط 1: شمعتان حمراوان، 2 بجسم ممتلئ أطول من 1، وذيل سفلي لـ 2 أطول من 1
+            is_full_red_2 = is_red_2 and (body2 > range2 * 0.45) # يمنع الشموع الفارغة
+            cond_reds = is_red_1 and is_full_red_2 and (body2 > body1) and (lower_wick2 > lower_wick1)
+
+            # --- تفكيك الشمعة 3 ---
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
-            is_green_full_3 = is_green_3 and (body3 > (h3 - l3) * 0.4)
-            is_c3_inside_c2 = (h3 <= h2 and l3 >= l2)
+            range3 = h3 - l3
             
-            # 3. الشمعة الرابعة (الكاسرة الصارمة): خضراء، وإغلاقها أعلى من قمة الشمعة الخضراء الأولى (الثالثة) صعوداً بوضوح
+            # الشرط 2: خضراء ممتلئة داخل جِسم الشمعة 2 بالكامل، وإغلاق في المنتصف
+            is_full_green_3 = is_green_3 and (body3 > range3 * 0.4)
+            body2_top = max(o2, cl2)
+            body2_bottom = min(o2, cl2)
+            
+            # تقع بالكامل داخل جسم 2 (هاي ولو 3 محصوران بين قمة وقاع جسم 2)
+            is_c3_inside_body2 = (h3 <= body2_top) and (l3 >= body2_bottom)
+            
+            # إغلاق منضبط في المنتصف (حوالين منتصف جسم 2)
+            body2_middle = (body2_top + body2_bottom) / 2
+            is_c3_close_in_middle = abs(cl3 - body2_middle) <= (body2 * 0.25)
+
+            # --- تفكيك الشمعة 4 ---
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             is_green_4 = cl4 > o4
-            is_c4_break = is_green_4 and (cl4 > h3) # شرط كسر صارم: إغلاق الخضراء الرابعة فوق قمة الخضراء الثالثة
-            
-            # 4. الشمعة الخامسة: حمراء ممتلئة وداخل الشمعة الخضراء الرابعة بالكامل
+            # الشرط 3: خضراء صاعدة اخترقت وأغلقت أعلى قمة الشمعة 3
+            is_c4_break = is_green_4 and (cl4 > h3)
+
+            # --- تفكيك الشمعة 5 ---
             o5, h5, l5, cl5 = c5[1], c5[2], c5[3], c5[4]
             is_red_5 = cl5 < o5
             body5 = abs(o5 - cl5)
-            is_red_full_5 = is_red_5 and (body5 > (h5 - l5) * 0.4)
-            is_c5_inside_c4 = (h5 <= h4 and l5 >= l4)
+            range5 = h5 - l5
             
-            if cond_reds and is_green_full_3 and is_c3_inside_c2 and is_c4_break and is_red_full_5 and is_c5_inside_c4:
-                # استخدام توقيت شمعة الإغلاق كمعرف فريد لمنع التكرار
+            body4_top = max(o4, cl4)
+            body4_bottom = min(o4, cl4)
+            
+            # الشرط 4: حمراء ممتلئة داخل جِسم الشمعة 4 بالكامل
+            is_full_red_5 = is_red_5 and (body5 > range5 * 0.4)
+            is_c5_inside_body4 = (h5 <= body4_top) and (l5 >= body4_bottom)
+            
+            # إغلاق منضبط في منتصف جسم الشمعة 4
+            body4_middle = (body4_top + body4_bottom) / 2
+            is_c5_close_in_middle = abs(cl5 - body4_middle) <= (abs(o4 - cl4) * 0.25)
+            
+            # الذيل العلوي لـ 5 أصغر من الذيل العلوي لـ 4
+            upper_wick_4 = h4 - max(o4, cl4)
+            upper_wick_5 = h5 - max(o5, cl5)
+            is_upper_wick_smaller = upper_wick_5 < upper_wick_4
+
+            # --- التجميع النهائي الصارم ---
+            if (cond_reds and 
+                is_full_green_3 and is_c3_inside_body2 and is_c3_close_in_middle and 
+                is_c4_break and 
+                is_full_red_5 and is_c5_inside_body4 and is_c5_close_in_middle and is_upper_wick_smaller):
+                
                 candle_timestamp = c5[0]
                 alert_key = f"{symbol}_{tf}_{candle_timestamp}"
                 
@@ -130,18 +165,17 @@ def check_logic(symbol, tf):
         return False
 
 print(f"🚀 Radar Started: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار بنجاح مع شرط الكسر الصارم ومنع التكرار.")
+send_telegram_message("🚀 تم تشغيل الرادار الصارم بنجاح مع الفلاتر الهندسية الدقيقة.")
 
 while True:
     try:
         for index, symbol in enumerate(MY_SYMBOLS, 1):
             for tf in TIMEFRAMES:
                 if check_logic(symbol, tf):
-                    alert_msg = f"🎯 *تنبيه رادار بينانس!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"🎯 *تنبيه رادار بينانس الصارم!*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND: {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
                 
-                # توقف آمن لمنع الحظر
                 time.sleep(0.3)
         
         print("--- Cycle Finished. Restarting Now ---", flush=True)
