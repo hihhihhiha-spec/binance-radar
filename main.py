@@ -156,7 +156,7 @@ def check_logic(symbol, tf):
         return False
 
 
-# --- الاستراتيجية الثانية الجديدة ---
+# --- الاستراتيجية الثانية (معدلة ومشددة بالكامل) ---
 def check_strategy_2(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -166,12 +166,12 @@ def check_strategy_2(symbol, tf):
         for i in range(len(bars) - 3):
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            # الشمعة 1: حمراء وممتلئة
+            # الشمعة 1: حمراء وممتلئة جداً (أكثر من 50% من طولها جسم)
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
             range1 = h1 - l1
-            is_full_1 = is_red_1 and (range1 > 0 and body1 > range1 * 0.4)
+            is_full_1 = is_red_1 and (range1 > 0 and body1 > range1 * 0.5)
             lower_wick1 = min(o1, cl1) - l1
 
             # الشمعة 2: حمراء ممتلئة، حجمها أصغر من 1، وديلها السفلي أصغر من 1
@@ -179,18 +179,19 @@ def check_strategy_2(symbol, tf):
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
             range2 = h2 - l2
-            is_full_2 = is_red_2 and (range2 > 0 and body2 > range2 * 0.4)
+            is_full_2 = is_red_2 and (range2 > 0 and body2 > range2 * 0.5)
             lower_wick2 = min(o2, cl2) - l2
             
             cond_c2 = is_full_2 and (body2 < body1) and (lower_wick2 < lower_wick1)
 
-            # الشمعة 3: خضراء ممتلئة وتكسر
+            # الشمعة 3: خضراء ممتلئة، تكسر أعلى شمعة 2، وديلها السفلي لا يتعدى قاع شمعة 2
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
             range3 = h3 - l3
-            is_full_3 = is_green_3 and (range3 > 0 and body3 > range3 * 0.4)
-            is_break_3 = is_full_3 and (cl3 > h2 or cl3 > o2)
+            is_full_3 = is_green_3 and (range3 > 0 and body3 > range3 * 0.5)
+            is_break_3 = cl3 > h2  # إغلاق صريح فوق قمة شمعة 2
+            is_wick_c3_valid = l3 >= l2  # الديل السفلي للخضراء لا ينزل تحت قاع الحمراء الثانية
 
             # الشمعة 4: حمراء داخل الشمعة الخضراء، وإغلاق فوق نصف الشمعة الخضراء
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
@@ -199,7 +200,10 @@ def check_strategy_2(symbol, tf):
             green_middle_3 = (o3 + cl3) / 2
             is_close_above_middle_3 = cl4 > green_middle_3
 
-            if is_full_1 and cond_c2 and is_break_3 and is_red_4 and is_inside_c3 and is_close_above_middle_3:
+            if (is_full_1 and cond_c2 and 
+                is_full_3 and is_break_3 and is_wick_c3_valid and 
+                is_red_4 and is_inside_c3 and is_close_above_middle_3):
+                
                 candle_timestamp = c4[0]
                 alert_key = f"{symbol}_{tf}_{candle_timestamp}_s2"
                 
@@ -214,7 +218,7 @@ def check_strategy_2(symbol, tf):
 
 
 print(f"🚀 Radar Started with 2 Strategies: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار بالاستراتيجيتين بنجاح.")
+send_telegram_message("🚀 تم تشغيل الرادار بالاستراتيجيتين (المُعدّلة والمشددة) بنجاح.")
 
 while True:
     try:
