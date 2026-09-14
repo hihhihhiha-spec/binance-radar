@@ -40,40 +40,41 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# --- دالة لجلب أعلى العملات حسب نسبة التغير المئوي لآخر 24 ساعة في الفيوتشرز ---
+# --- دالة خفيفة جداً لجلب أعلى العملات ارتفاعاً بدون إجهاد الـ Rate Limit ---
 def get_top_gainers_futures(limit=200):
     try:
-        print("⏳ جاري تحميل الأسواق من بينانس...", flush=True)
-        exchange.load_markets()
-        print("⏳ جاري جلب أسعار التغير (Tickers)...", flush=True)
-        tickers = exchange.fetch_tickers()
-        print(f"📊 تم استقبال {len(tickers)} تيكر من بينانس", flush=True)
+        print("⏳ جاري جلب قائمة التغير 24 ساعة من بينانس (طريقة خفيفة)...", flush=True)
+        # استخدام الطلب المباشر والخفيف من API الفيوتشرز الخاص ببينانس (24hr Ticker Price Change)
+        tickers_data = exchange.fapiPublicGetTicker24hr()
         
         valid_symbols = []
-        for symbol, ticker in tickers.items():
-            try:
-                market = exchange.market(symbol)
-                if market.get('linear') and market.get('swap'):
-                    percentage = ticker.get('percentage')
-                    if percentage is None:
-                        percentage = -999999
-                    valid_symbols.append((symbol, float(percentage)))
-            except Exception:
-                continue
-        
+        for item in tickers_data:
+            symbol = item.get('symbol', '')
+            # التصفية لأزواج USDT الدائمة فقط
+            if symbol.endswith('USDT'):
+                try:
+                    price_change_percent = float(item.get('priceChangePercent', -9999))
+                    # تحويل الاسم لصيغة CCXT القياسية (مثل BTC/USDT)
+                    formatted_symbol = symbol[:-4] + '/USDT'
+                    valid_symbols.append((formatted_symbol, price_change_percent))
+                except (ValueError, TypeError):
+                    continue
+
+        # ترتيب العملات من الأعلى ارتفاعاً إلى الأقل
         valid_symbols.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [item[0] for item in valid_symbols[:limit]]
-        print(f"✅ تم تصفية أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
+        
+        print(f"✅ تم جلب أعلى {len(top_symbols)} عملة بنجاح واستقرار.", flush=True)
         return top_symbols
+
     except Exception as e:
-        print(f"❌ بالتحديد خطأ جلب العملات هو: {e}", flush=True)
+        print(f"❌ خطأ أثناء جلب العملات بالطريقة الخفيفة: {e}", flush=True)
         return []
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
-
 sent_alerts = {}
 
-# --- الاستراتيجية الأولى (بدون أي تعديل) ---
+# --- الاستراتيجية الأولى ---
 def check_logic(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=6)
@@ -83,13 +84,11 @@ def check_logic(symbol, tf):
         for i in range(len(bars) - 4):
             c1, c2, c3, c4, c5 = bars[i], bars[i+1], bars[i+2], bars[i+3], bars[i+4]
             
-            # --- تفكيك الشمعة 1 ---
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
             lower_wick1 = min(o1, cl1) - l1
 
-            # --- تفكيك الشمعة 2 ---
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
@@ -99,7 +98,6 @@ def check_logic(symbol, tf):
             is_full_red_2 = is_red_2 and (body2 > range2 * 0.45)
             cond_reds = is_red_1 and is_full_red_2 and (body2 > body1) and (lower_wick2 > lower_wick1)
 
-            # --- تفكيك الشمعة 3 ---
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
@@ -113,12 +111,10 @@ def check_logic(symbol, tf):
             body2_middle = (body2_top + body2_bottom) / 2
             is_c3_close_in_middle = abs(cl3 - body2_middle) <= (body2 * 0.25)
 
-            # --- تفكيك الشمعة 4 ---
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             is_green_4 = cl4 > o4
             is_c4_break = is_green_4 and (cl4 > h3)
 
-            # --- تفكيك الشمعة 5 ---
             o5, h5, l5, cl5 = c5[1], c5[2], c5[3], c5[4]
             is_red_5 = cl5 < o5
             body5 = abs(o5 - cl5)
@@ -150,11 +146,11 @@ def check_logic(symbol, tf):
                     return True
                 
         return False
-    except Exception as e:
+    except Exception:
         return False
 
 
-# --- الاستراتيجية الثانية (معدلة ومشددة بالكامل) ---
+# --- الاستراتيجية الثانية ---
 def check_strategy_2(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -164,7 +160,6 @@ def check_strategy_2(symbol, tf):
         for i in range(len(bars) - 3):
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            # الشمعة 1: حمراء وممتلئة جداً (أكثر من 50% من طولها جسم)
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
@@ -172,7 +167,6 @@ def check_strategy_2(symbol, tf):
             is_full_1 = is_red_1 and (range1 > 0 and body1 > range1 * 0.5)
             lower_wick1 = min(o1, cl1) - l1
 
-            # الشمعة 2: حمراء ممتلئة، حجمها أصغر من 1، وديلها السفلي أصغر من 1
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
@@ -182,16 +176,14 @@ def check_strategy_2(symbol, tf):
             
             cond_c2 = is_full_2 and (body2 < body1) and (lower_wick2 < lower_wick1)
 
-            # الشمعة 3: خضراء ممتلئة، تكسر أعلى شمعة 2، وديلها السفلي لا يتعدى قاع شمعة 2
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
             range3 = h3 - l3
             is_full_3 = is_green_3 and (range3 > 0 and body3 > range3 * 0.5)
-            is_break_3 = cl3 > h2  # إغلاق صريح فوق قمة شمعة 2
-            is_wick_c3_valid = l3 >= l2  # الديل السفلي للخضراء لا ينزل تحت قاع الحمراء الثانية
+            is_break_3 = cl3 > h2
+            is_wick_c3_valid = l3 >= l2
 
-            # الشمعة 4: حمراء داخل الشمعة الخضراء، وإغلاق فوق نصف الشمعة الخضراء
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             is_red_4 = cl4 < o4
             is_inside_c3 = (h4 <= h3 and l4 >= l3)
@@ -210,36 +202,33 @@ def check_strategy_2(symbol, tf):
                     return True
 
         return False
-    except Exception as e:
+    except Exception:
         return False
 
 
-print("🚀 Radar Started with Top 200 Gainers & 2 Strategies.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار (أعلى 200 عملة حسب التغير المئوي 24 ساعة) بنجاح.")
+print("🚀 Radar Started with Lightweight Top 200 Gainers Fetching.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار (أعلى 200 عملة بدالة جلب خفيفة جداً).")
 
 while True:
     try:
-        print("⏳ جاري استدعاء get_top_gainers_futures()...", flush=True)
         active_symbols = get_top_gainers_futures(limit=200)
         
         if not active_symbols:
-            print("⚠️ لم يتم العثور على أي عملات، سيتم الانتظار 15 ثانية وإعادة المحاولة...", flush=True)
-            time.sleep(15)
+            print("⚠️ القائمة فارغة، سيعيد المحاولة بعد 10 ثوانٍ...", flush=True)
+            time.sleep(10)
             continue
 
-        print(f"📋 Loaded {len(active_symbols)} symbols. Starting loop...", flush=True)
+        print(f"📋 تم تحميل {len(active_symbols)} عملة. بدء الفحص للـ 7 فريمات...", flush=True)
 
         for index, symbol in enumerate(active_symbols, 1):
             for tf in TIMEFRAMES:
-                print(f"🔍 [فتح وفحص] العملة رقم {index}/{len(active_symbols)}: {symbol} | الفريم: {tf}", flush=True)
+                print(f"🔍 [فحص] {index}/{len(active_symbols)}: {symbol} | الفريم: {tf}", flush=True)
                 
-                # فحص الاستراتيجية الأولى
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND (Strategy 1): {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
 
-                # فحص الاستراتيجية الثانية
                 if check_strategy_2(symbol, tf):
                     alert_msg = f"🔥 *تنبيه رادار بينانس (استراتيجية 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND (Strategy 2): {symbol} | {tf}", flush=True)
@@ -247,8 +236,9 @@ while True:
                 
                 time.sleep(0.4)
         
-        print("--- Cycle Finished. Refreshing Top Gainers & Restarting ---", flush=True)
-        time.sleep(15)
+        print("--- اكتملت الدورة. إعادات جلب أعلى 200 عملة والبدء من جديد ---", flush=True)
+        time.sleep(10)
+
     except Exception as e:
         print(f"❌ Main Loop Error: {e}", flush=True)
-        time.sleep(30)
+        time.sleep(20)
