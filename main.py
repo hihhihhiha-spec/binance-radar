@@ -42,7 +42,9 @@ exchange = ccxt.binance({
 # --- دالة لجلب أعلى العملات حسب نسبة التغير المئوي لآخر 24 ساعة في الفيوتشرز ---
 def get_top_gainers_futures(limit=200):
     try:
+        print("⏳ جاري تحميل الأسواق من بينانس...", flush=True)
         exchange.load_markets()
+        print("⏳ جاري جلب أسعار التغير (Tickers)...", flush=True)
         tickers = exchange.fetch_tickers()
         valid_symbols = []
         
@@ -56,12 +58,12 @@ def get_top_gainers_futures(limit=200):
         
         valid_symbols.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [item[0] for item in valid_symbols[:limit]]
+        print(f"✅ تم جلب أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
         return top_symbols
     except Exception as e:
-        print(f"Error fetching top gainers symbols: {e}", flush=True)
+        print(f"❌ Error fetching top gainers symbols: {e}", flush=True)
         return []
 
-# تمت إضافة فريم 4h هنا
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
 sent_alerts = {}
@@ -212,16 +214,18 @@ send_telegram_message("🚀 تم تشغيل الرادار (أعلى 200 عمل�
 
 while True:
     try:
+        print("⏳ جاري استدعاء get_top_gainers_futures()...", flush=True)
         active_symbols = get_top_gainers_futures(limit=200)
+        
         if not active_symbols:
+            print("⚠️ لم يتم العثور على أي عملات، سيتم الانتظار 15 ثانية وإعادة المحاولة...", flush=True)
             time.sleep(15)
             continue
 
-        print(f"📋 Loaded {len(active_symbols)} symbols: {active_symbols}", flush=True)
+        print(f"📋 Loaded {len(active_symbols)} symbols. Starting loop...", flush=True)
 
         for index, symbol in enumerate(active_symbols, 1):
             for tf in TIMEFRAMES:
-                # طباعة واضحة عند فتح وفحص كل عملة
                 print(f"🔍 [فتح وفحص] العملة رقم {index}/{len(active_symbols)}: {symbol} | الفريم: {tf}", flush=True)
                 
                 # فحص الاستراتيجية الأولى
@@ -241,5 +245,5 @@ while True:
         print("--- Cycle Finished. Refreshing Top Gainers & Restarting ---", flush=True)
         time.sleep(15)
     except Exception as e:
-        print(f"Main Loop Error: {e}", flush=True)
+        print(f"❌ Main Loop Error: {e}", flush=True)
         time.sleep(30)
