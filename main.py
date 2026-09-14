@@ -53,7 +53,6 @@ def get_top_volatile_symbols(limit=30):
                 pct = abs(float(data['percentage']))
                 movers.append((symbol, pct))
         
-        # ترتيب العملات تنازلياً حسب أعلى نسبة تغير (أو حركية) في 24 ساعة
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
         print(f"🔥 تم اختيار أهم {len(top_symbols)} عملات متحركة في 24 ساعة.", flush=True)
@@ -213,6 +212,8 @@ while True:
 
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
+                print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
+                
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND (Strategy 1): {symbol} | {tf}", flush=True)
