@@ -18,7 +18,7 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram Send Error: {e}", flush=True)
 
-# --- 1. حل مشكلة توقف Render ---
+# --- 1. حل مشكلة توقف Render (سيرفر ويب بسيط للبورت) ---
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -31,7 +31,8 @@ def run_port_server():
     server = HTTPServer(('0.0.0.0', port), DummyServer)
     server.serve_forever()
 
-threading.Thread(target=run_port_server, daemon=True).call if hasattr(threading.Thread(target=run_port_server, daemon=True), 'call') else threading.Thread(target=run_port_server, daemon=True).start()
+# تشغيل السيرفر في الخلفية بشكل آمن
+threading.Thread(target=run_port_server, daemon=True).start()
 
 # --- 2. إعدادات بينانس ---
 exchange = ccxt.binance({
@@ -39,7 +40,7 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# دالة لجلب أعلى العملات في الفيوتشرز حسب الفوليوم (مثلاً Top 60)
+# دالة لجلب أعلى العملات في الفيوتشرز حسب الفوليوم بأمان
 def get_top_volume_futures(limit=60):
     try:
         exchange.load_markets()
@@ -47,13 +48,11 @@ def get_top_volume_futures(limit=60):
         valid_symbols = []
         
         for symbol, ticker in tickers.items():
-            # نتأكد أنها عقد آجل USDT Perpetual وليست سبوت أو عقود تاريخية
             if symbol.endswith('/USDT:USDT') or (symbol.endswith('/USDT') and 'swap' in exchange.market(symbol).get('type', '')):
                 quote_volume = ticker.get('quoteVolume', 0) or 0
-                clean_symbol = symbol.split(':')[0] # تنسيق الرمز بشكل نظيف مثل BTC/USDT
+                clean_symbol = symbol.split(':')[0]
                 valid_symbols.append((clean_symbol, quote_volume))
         
-        # ترتيب العملات تنازلياً حسب الأعلى فوليوم
         valid_symbols.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [item[0] for item in valid_symbols[:limit]]
         return top_symbols
@@ -64,7 +63,7 @@ def get_top_volume_futures(limit=60):
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
 
-# --- الاستراتيجية الأولى (بدون أي تعديل) ---
+# --- الاستراتيجية الأولى ---
 def check_logic(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=6)
@@ -74,13 +73,11 @@ def check_logic(symbol, tf):
         for i in range(len(bars) - 4):
             c1, c2, c3, c4, c5 = bars[i], bars[i+1], bars[i+2], bars[i+3], bars[i+4]
             
-            # --- تفكيك الشمعة 1 ---
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
             lower_wick1 = min(o1, cl1) - l1
 
-            # --- تفكيك الشمعة 2 ---
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
@@ -90,7 +87,6 @@ def check_logic(symbol, tf):
             is_full_red_2 = is_red_2 and (body2 > range2 * 0.45)
             cond_reds = is_red_1 and is_full_red_2 and (body2 > body1) and (lower_wick2 > lower_wick1)
 
-            # --- تفكيك الشمعة 3 ---
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
@@ -104,12 +100,10 @@ def check_logic(symbol, tf):
             body2_middle = (body2_top + body2_bottom) / 2
             is_c3_close_in_middle = abs(cl3 - body2_middle) <= (body2 * 0.25)
 
-            # --- تفكيك الشمعة 4 ---
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             is_green_4 = cl4 > o4
             is_c4_break = is_green_4 and (cl4 > h3)
 
-            # --- تفكيك الشمعة 5 ---
             o5, h5, l5, cl5 = c5[1], c5[2], c5[3], c5[4]
             is_red_5 = cl5 < o5
             body5 = abs(o5 - cl5)
@@ -142,11 +136,10 @@ def check_logic(symbol, tf):
                 
         return False
     except Exception as e:
-        print(f"Error checking {symbol} on {tf} (s1): {e}", flush=True)
         return False
 
 
-# --- الاستراتيجية الثانية (معدلة ومشددة بالكامل) ---
+# --- الاستراتيجية الثانية ---
 def check_strategy_2(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -156,7 +149,6 @@ def check_strategy_2(symbol, tf):
         for i in range(len(bars) - 3):
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            # الشمعة 1: حمراء وممتلئة جداً
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
@@ -164,7 +156,6 @@ def check_strategy_2(symbol, tf):
             is_full_1 = is_red_1 and (range1 > 0 and body1 > range1 * 0.5)
             lower_wick1 = min(o1, cl1) - l1
 
-            # الشمعة 2: حمراء ممتلئة، حجمها أصغر من 1، وديلها السفلي أصغر من 1
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
@@ -174,7 +165,6 @@ def check_strategy_2(symbol, tf):
             
             cond_c2 = is_full_2 and (body2 < body1) and (lower_wick2 < lower_wick1)
 
-            # الشمعة 3: خضراء ممتلئة، تكسر أعلى شمعة 2، وديلها السفلي لا يتعدى قاع شمعة 2
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
@@ -183,7 +173,6 @@ def check_strategy_2(symbol, tf):
             is_break_3 = cl3 > h2
             is_wick_c3_valid = l3 >= l2
 
-            # الشمعة 4: حمراء داخل الشمعة الخضراء، وإغلاق فوق نصف الشمعة الخضراء
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             is_red_4 = cl4 < o4
             is_inside_c3 = (h4 <= h3 and l4 >= l3)
@@ -202,20 +191,18 @@ def check_strategy_2(symbol, tf):
                     return True
 
         return False
-    exceptException as e:
-        print(f"Error checking {symbol} on {tf} (s2): {e}", flush=True)
+    except Exception as e:
         return False
 
 
-print("🚀 Radar Starting with Dynamic Top Volume Futures...", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار بنظام جلب أعلى العملات فوليوم في الفيوتشرز تلقائياً.")
+print("🚀 Radar Starting...", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار بنجاح.")
 
 while True:
     try:
-        # يتم جلب أعلى 60 عملة من حيث الفوليوم في كل دورة أو يمكن تحديثها باستمرار
         active_symbols = get_top_volume_futures(limit=60)
         if not active_symbols:
-            time.sleep(10)
+            time.sleep(15)
             continue
 
         for symbol in active_symbols:
