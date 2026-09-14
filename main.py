@@ -46,7 +46,7 @@ TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
 
 # --- دالة لجلب أعلى العملات صعوداً في فيوتشرز بايبيت ديناميكياً ---
-def get_top_futures_gainers(limit=30):
+def get_top_futures_gainers(limit=150):
     try:
         print("📡 جاري جلب تيكرات فيوتشرز بايبيت (Bybit Linear)...", flush=True)
         tickers = exchange.fetch_tickers()
@@ -69,7 +69,7 @@ def get_top_futures_gainers(limit=30):
         # ترتيب تنازلي حسب أعلى نسبة صعود في 24 ساعة
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
-        print(f"🔥 تم جلب أعلى {len(top_symbols)} عملات في فيوتشرز بايبيت بنجاح: {top_symbols[:5]}...", flush=True)
+        print(f"🔥 تم جلب أعلى {len(top_symbols)} عملات في فيوتشرز بايبيت بنجاح.", flush=True)
         return top_symbols
         
     except Exception as e:
@@ -199,7 +199,7 @@ def check_strategy_2(symbol, tf):
                 alert_key = f"{symbol}_{tf}_{candle_timestamp}_s2"
                 
                 if alert_key not in sent_alerts:
-                    sent_alerts[alert_key] = True
+                    sent_alerts[alert_Key] = True
                     return True
 
         return False
@@ -207,8 +207,8 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started for Bybit Futures Top Gainers.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار لأعلى العملات في فيوتشرز بايبيت.")
+print("🚀 Radar Started for Bybit Futures Top Gainers (150 coins).", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار لأعلى 150 عملة في فيوتشرز بايبيت.")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -218,7 +218,7 @@ while True:
     try:
         current_time = time.time()
         if (current_time - last_movers_update) > UPDATE_INTERVAL or not top_symbols_cache:
-            top_symbols_cache = get_top_futures_gainers(limit=30)
+            top_symbols_cache = get_top_futures_gainers(limit=150)
             last_movers_update = current_time
 
         if not top_symbols_cache:
@@ -244,7 +244,7 @@ while True:
                 
                 time.sleep(0.4)
         
-        print("--- اكتملت دورة الفحص. انتظار قليل ---", flush=True)
+        print("--- اكتملت دورة الفحص. انتظار قليل ---", flush=Time)
         time.sleep(10)
 
     except Exception as e:
