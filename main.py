@@ -39,36 +39,28 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# --- 3. قائمة العملات ---
-MY_SYMBOLS = [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
-    'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
-    'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT', 'HBAR/USDT', 'ALGO/USDT', 'FIL/USDT', 'ICP/USDT', 'GRT/USDT', 'STX/USDT',
-    'INJ/USDT', 'RNDR/USDT', 'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'THETA/USDT', 'EGLD/USDT', 'AAVE/USDT', 'UNI/USDT',
-    'SUSHI/USDT', 'DYDX/USDT', 'CRV/USDT', 'MKR/USDT', 'LDO/USDT', 'PENDLE/USDT', 'ENS/USDT', 'ID/USDT', 'MAV/USDT', 'EDU/USDT',
-    'GALA/USDT', 'ORDI/USDT', '1000SATS/USDT', 'BEAMX/USDT', 'PYTH/USDT', 'JUP/USDT', 'STRK/USDT', 'DYM/USDT', 'MANTA/USDT', 'ALT/USDT',
-    'ZETA/USDT', 'PIXEL/USDT', 'RONIN/USDT', 'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'IMX/USDT', 'FLOW/USDT', 'CHZ/USDT', 'ENJ/USDT',
-    'YGG/USDT', 'ILV/USDT', 'MAGIC/USDT', 'RUNE/USDT', 'KAS/USDT', 'TWT/USDT', 'GAS/USDT', 'NEO/USDT', 'QTUM/USDT', 'VET/USDT',
-    'CFX/USDT', 'KAVA/USDT', 'IOTA/USDT', 'ZIL/USDT', 'ONT/USDT', 'BAT/USDT', 'MASK/USDT', 'LRC/USDT', 'ANKR/USDT', 'LPT/USDT',
-    'BLUR/USDT', 'JOE/USDT', 'MINA/USDT', 'WOO/USDT', 'ASTR/USDT', 'GLMR/USDT', 'METIS/USDT', 'QNT/USDT', 'GMX/USDT', 'SNX/USDT',
-    '1INCH/USDT', 'ALICE/USDT', 'ALPHA/USDT', 'AMB/USDT', 'APE/USDT', 'API3/USDT', 'AR/USDT', 'ARK/USDT', 'ARKM/USDT', 'ARPA/USDT',
-    'ATA/USDT', 'ATOM/USDT', 'AUCTION/USDT', 'AUDIO/USDT', 'AXL/USDT', 'BAKE/USDT', 'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT',
-    'BIGTIME/USDT', 'BLZ/USDT', 'BNX/USDT', 'BSV/USDT', 'BSW/USDT', 'C98/USDT', 'CAKE/USDT', 'CELO/USDT', 'CELR/USDT', 'COMBO/USDT',
-    'COMP/USDT', 'COTI/USDT', 'CTK/USDT', 'CTSI/USDT', 'CVP/USDT', 'DAR/USDT', 'DASH/USDT', 'DATA/USDT', 'DENT/USDT', 'DGB/USDT',
-    'DOCK/USDT', 'DODO/USDT', 'DUSK/USDT', 'EPX/USDT', 'ERN/USDT', 'ETC/USDT', 'FLM/USDT', 'FRONT/USDT', 'FTM/USDT', 'FXS/USDT',
-    'GAL/USDT', 'GHST/USDT', 'GLM/USDT', 'GMT/USDT', 'GNO/USDT', 'GTC/USDT', 'HARD/USDT', 'HFT/USDT', 'HIGH/USDT', 'HOOK/USDT',
-    'HOT/USDT', 'ICX/USDT', 'IDEX/USDT', 'IOTX/USDT', 'KEY/USDT', 'KNC/USDT', 'KSM/USDT', 'LINA/USDT', 'LOOM/USDT', 'LQTY/USDT',
-    'LSK/USDT', 'LUNC/USDT', 'LUNA/USDT', 'MDT/USDT', 'MOVR/USDT', 'MTL/USDT', 'NKN/USDT', 'NMR/USDT', 'NTRN/USDT', 'NULS/USDT',
-    'OGN/USDT', 'OMG/USDT', 'ONG/USDT', 'OXT/USDT', 'PAXG/USDT', 'PERP/USDT', 'PHB/USDT', 'PIVX/USDT', 'POL/USDT', 'POLS/USDT',
-    'POWR/USDT', 'PROS/USDT', 'PSG/USDT', 'PUNDIX/USDT', 'PYR/USDT', 'QI/USDT', 'QUICK/USDT', 'RAD/USDT', 'RARE/USDT', 'RAY/USDT',
-    'REEF/USDT', 'REI/USDT', 'REN/USDT', 'REQ/USDT', 'RIF/USDT', 'RLC/USDT', 'ROSE/USDT', 'RSR/USDT', 'RSS3/USDT', 'RVN/USDT',
-    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'SPELL/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT',
-    'STPT/USDT', 'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT',
-    'UMA/USDT', 'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT',
-    'WAXP/USDT', 'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT',
-    'XWG/USDT', 'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT',
-    'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
-]
+# --- دالة لجلب أعلى العملات حسب نسبة التغير المئوي لآخر 24 ساعة في الفيوتشرز ---
+def get_top_gainers_futures(limit=300):
+    try:
+        exchange.load_markets()
+        tickers = exchange.fetch_tickers()
+        valid_symbols = []
+        
+        for symbol, ticker in tickers.items():
+            if symbol.endswith('/USDT:USDT') or (symbol.endswith('/USDT') and exchange.market(symbol).get('swap', False)):
+                percentage = ticker.get('percentage', 0)
+                if percentage is None:
+                    percentage = -999999
+                clean_symbol = symbol.split(':')[0]
+                valid_symbols.append((clean_symbol, float(percentage)))
+        
+        # الترتيب تنازلياً حسب نسبة التغير المئوية (الأعلى صعوداً أولاً)
+        valid_symbols.sort(key=lambda x: x[1], reverse=True)
+        top_symbols = [item[0] for item in valid_symbols[:limit]]
+        return top_symbols
+    except Exception as e:
+        print(f"Error fetching top gainers symbols: {e}", flush=True)
+        return []
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
@@ -152,7 +144,6 @@ def check_logic(symbol, tf):
                 
         return False
     except Exception as e:
-        print(f"Error checking {symbol} on {tf} (s1): {e}", flush=True)
         return False
 
 
@@ -213,17 +204,25 @@ def check_strategy_2(symbol, tf):
 
         return False
     except Exception as e:
-        print(f"Error checking {symbol} on {tf} (s2): {e}", flush=True)
         return False
 
 
-print(f"🚀 Radar Started with 2 Strategies: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار بالاستراتيجيتين (المُعدّلة والمشددة) بنجاح.")
+print("🚀 Radar Started with Top Gainers (24h Percentage) & 2 Strategies.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار (أعلى نسبة تغير مئوي 24 ساعة في الفيوتشرز) بنجاح.")
 
 while True:
     try:
-        for index, symbol in enumerate(MY_SYMBOLS, 1):
+        active_symbols = get_top_gainers_futures(limit=300)
+        if not active_symbols:
+            time.sleep(15)
+            continue
+
+        print(f"📋 Loaded {len(active_symbols)} symbols sorted by 24h Percentage Gain.", flush=True)
+
+        for index, symbol in enumerate(active_symbols, 1):
             for tf in TIMEFRAMES:
+                print(f"⏳ جاري معالجة العملة: {symbol} | الفريم: {tf}", flush=True)
+                
                 # فحص الاستراتيجية الأولى
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
@@ -238,7 +237,7 @@ while True:
                 
                 time.sleep(0.3)
         
-        print("--- Cycle Finished. Restarting Now ---", flush=True)
+        print("--- Cycle Finished. Refreshing Top Gainers & Restarting ---", flush=True)
         time.sleep(10)
     except Exception as e:
         print(f"Main Loop Error: {e}", flush=True)
