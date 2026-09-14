@@ -43,30 +43,36 @@ exchange = ccxt.binance({
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
 
-# --- دالة لجلب أكثر العملات تحركاً عبر API مباشر لبينانس ---
+# --- دالة لجلب أكثر العملات صعوداً (Top Gainers) في 24 ساعة بـ Headers متصفح حقيقي ---
 def get_top_volatile_symbols(limit=30):
     try:
-        print("📡 جاري طلب التيكرات من بينانس مباشرة...", flush=True)
+        print("📡 جاري طلب التيكرات من بينانس مع ترويسات المتصفح...", flush=True)
         url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, timeout=10)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.binance.com/'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code != 200:
-            print(f"❌ بينانس ردت بكود خطأ: {response.status_code} - {response.text}", flush=True)
+            print(f"❌ بينانس ردت بكود خطأ: {response.status_code} - {response.text[:200]}", flush=True)
             return []
             
         data = response.json()
-        movers = []
+        gainers = []
         for item in data:
             symbol = item.get('symbol', '')
             if symbol.endswith('USDT'):
-                # تحويل تنسيق symbol من BTCUSDT إلى BTC/USDT ليتوافق مع ccxt
                 ccxt_symbol = symbol[:-4] + '/USDT'
-                pct = abs(float(item.get('priceChangePercent', 0)))
-                movers.append((ccxt_symbol, pct))
+                pct = float(item.get('priceChangePercent', 0))
+                gainers.append((ccxt_symbol, pct))
         
-        movers.sort(key=lambda x: x[1], reverse=True)
-        top_symbols = [m[0] for m in movers[:limit]]
-        print(f"🔥 تم اختيار أهم {len(top_symbols)} عملات متحركة في 24 ساعة بنجاح.", flush=True)
+        # ترتيب تنازلي حسب أعلى نسبة صعود في 24 ساعة (الأكثر صعوداً أولاً)
+        gainers.sort(key=lambda x: x[1], reverse=True)
+        top_symbols = [m[0] for m in gainers[:limit]]
+        print(f"🔥 تم اختيار أهم {len(top_symbols)} عملات صاعدة في 24 ساعة بنجاح.", flush=True)
         return top_symbols
     except Exception as e:
         print(f"⚠️ خطأ أثناء جلب التيكرات: {e}", flush=True)
@@ -203,12 +209,12 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started for Top Volatile Coins.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار لفحص أكثر 30 عملة متحركة خلال 24 ساعة.")
+print("🚀 Radar Started for Top Gainers.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار لفحص أعلى العملات صعوداً في 24 ساعة.")
 
 last_movers_update = 0
 top_symbols_cache = []
-UPDATE_INTERVAL = 10 * 60  # تحديث قائمة العملات الأكثر حركة كل 10 دقائق
+UPDATE_INTERVAL = 10 * 60  # تحديث قائمة العملات الأكثر صعوداً كل 10 دقائق
 
 while True:
     try:
@@ -218,7 +224,7 @@ while True:
             last_movers_update = current_time
 
         if not top_symbols_cache:
-            print("⏳ لا توجد عملات في القائمة، إعادة المحاولة بعد 15 ثانية...", flush=True)
+            print("⏳ تعذر جلب قائمة الصاعدين، إعادة المحاولة بعد 15 ثانية...", flush=True)
             time.sleep(15)
             continue
 
@@ -238,7 +244,7 @@ while True:
                 
                 time.sleep(0.4)
         
-        print("--- اكتملت دورة فحص العملات الأكثر حركة. انتظار قليل ---", flush=True)
+        print("--- اكتملت دورة فحص العملات الصاعدة. انتظار قليل ---", flush=True)
         time.sleep(10)
 
     except Exception as e:
