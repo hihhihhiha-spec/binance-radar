@@ -40,37 +40,27 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# --- متغيرات نظام التخزين المؤقت (Cache) لقائمة العملات ---
-cached_symbols = []
-last_fetch_time = 0
-CACHE_DURATION = 2 * 60 * 60  # ساعتين بالثواني (7200 ثانية)
-
-def get_cached_symbols():
-    global cached_symbols, last_fetch_time
-    current_time = time.time()
-    
-    # إذا كانت القائمة فارغة أو مر عليها ساعتان، نقوم بجلبها من جديد
-    if not cached_symbols or (current_time - last_fetch_time) > CACHE_DURATION:
-        try:
-            print("⏳ جاري تحديث قائمة عملات الفيوتشرز من بينانس (كل ساعتين)...", flush=True)
-            exchange.load_markets()
-            symbols = []
-            for symbol, market in exchange.markets.items():
-                if market.get('linear') and market.get('swap') and symbol.endswith('/USDT'):
-                    symbols.append(symbol)
-            
-            if symbols:
-                cached_symbols = symbols
-                last_fetch_time = current_time
-                print(f"✅ تم تحديث وتخزين {len(cached_symbols)} عملة بنجاح.", flush=True)
-        except Exception as e:
-            print(f"⚠️ فشل تحديث القائمة بسبب: {e}", flush=True)
-            # إذا فشل الجلب (مثلاً IP لا يزال محظوراً مؤقتاً)، سنستمر بالقائمة القديمة إن وجدت
-    
-    return cached_symbols
-
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
+
+# --- دالة لجلب أكثر العملات تحركاً في آخر 24 ساعة ---
+def get_top_volatile_symbols(limit=30):
+    try:
+        tickers = exchange.fetch_tickers()
+        movers = []
+        for symbol, data in tickers.items():
+            if symbol.endswith('/USDT') and 'percentage' in data and data['percentage'] is not None:
+                pct = abs(float(data['percentage']))
+                movers.append((symbol, pct))
+        
+        # ترتيب العملات تنازلياً حسب أعلى نسبة تغير (أو حركية) في 24 ساعة
+        movers.sort(key=lambda x: x[1], reverse=True)
+        top_symbols = [m[0] for m in movers[:limit]]
+        print(f"🔥 تم اختيار أهم {len(top_symbols)} عملات متحركة في 24 ساعة.", flush=True)
+        return top_symbols
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء جلب التيكرات: {e}", flush=True)
+        return []
 
 # --- الاستراتيجية الأولى ---
 def check_logic(symbol, tf):
@@ -147,7 +137,6 @@ def check_logic(symbol, tf):
     except Exception:
         return False
 
-
 # --- الاستراتيجية الثانية ---
 def check_strategy_2(symbol, tf):
     try:
@@ -204,21 +193,25 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with 2-Hour Caching System.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار بنظام التخزين المؤقت لقائمة العملات (تحديث كل ساعتين).")
+print("🚀 Radar Started for Top Volatile Coins.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار لفحص أكثر 30 عملة متحركة خلال 24 ساعة.")
+
+last_movers_update = 0
+top_symbols_cache = []
+UPDATE_INTERVAL = 10 * 60  # تحديث قائمة العملات الأكثر حركة كل 10 دقائق
 
 while True:
     try:
-        active_symbols = get_cached_symbols()
-        
-        if not active_symbols:
-            print("⚠️ لا توجد عملات في القائمة، سيتم الانتظار 15 ثانية وإعادة المحاولة...", flush=True)
+        current_time = time.time()
+        if (current_time - last_movers_update) > UPDATE_INTERVAL or not top_symbols_cache:
+            top_symbols_cache = get_top_volatile_symbols(limit=30)
+            last_movers_update = current_time
+
+        if not top_symbols_cache:
             time.sleep(15)
             continue
 
-        print(f"📋 بدء فحص {len(active_symbols)} عملة...", flush=True)
-
-        for index, symbol in enumerate(active_symbols, 1):
+        for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
@@ -232,7 +225,7 @@ while True:
                 
                 time.sleep(0.4)
         
-        print("--- اكتملت دورة فحص جميع العملات. انتظار قليل قبل الدورة التالية ---", flush=True)
+        print("--- اكتملت دورة فحص العملات الأكثر حركة. انتظار قليل ---", flush=True)
         time.sleep(10)
 
     except Exception as e:
