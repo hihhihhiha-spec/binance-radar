@@ -34,40 +34,46 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات بينانس فيوتشرز (USDT-M Perpetual) ---
+# --- 2. إعدادات بينانس ---
 exchange = ccxt.binance({
-    'options': {
-        'defaultType': 'swap',  # عقود الفيوتشرز الدائمة USDT-M
-    },
+    'options': {'defaultType': 'future'},
     'enableRateLimit': True
 })
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
 
-# --- دالة لجلب أعلى العملات في فيوتشرز بينانس ديناميكياً ---
+# --- دالة لجلب أعلى العملات في فيوتشرز بينانس عبر بركسي وسيط لتجاوز الحظر ---
 def get_top_futures_gainers(limit=30):
     try:
-        print("📡 جاري جلب تيكرات فيوتشرز بينانس (USDT-M)...", flush=True)
-        tickers = exchange.fetch_tickers()
+        print("📡 جاري جلب تيكرات فيوتشرز بينانس عبر الوسيط...", flush=True)
+        # استخدام بروكسي عام يمرر الطلب لبينانس فيوتشرز مباشرة
+        target_url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        proxy_url = f"https://api.allorigins.win/raw?url={requests.utils.quote(target_url)}"
         
-        movers = []
-        for symbol, data in tickers.items():
-            # نأخذ فقط عقود الفيوتشرز التي تنتهي بـ /USDT
-            if symbol.endswith('/USDT') and 'percentage' in data and data['percentage'] is not None:
-                pct = float(data['percentage'])
-                movers.append((symbol, pct))
-        
-        if not movers:
-            print("⚠️ لم يتم استرجاع أي بيانات للفيوتشرز.", flush=True)
+        response = requests.get(proxy_url, timeout=15)
+        if response.status_code != 200:
+            print(f"⚠️ فشل الجلب عبر الوسيط، كود الرد: {response.status_code}", flush=True)
             return []
 
+        data = response.json()
+        gainers = []
+        for item in data:
+            symbol = item.get('symbol', '')
+            if symbol.endswith('USDT'):
+                ccxt_symbol = symbol[:-4] + '/USDT'
+                try:
+                    pct = float(item.get('priceChangePercent', 0))
+                    gainers.append((ccxt_symbol, pct))
+                except:
+                    pass
+
         # ترتيب تنازلي حسب أعلى نسبة صعود في 24 ساعة
-        movers.sort(key=lambda x: x[1], reverse=True)
-        top_symbols = [m[0] for m in movers[:limit]]
+        gainers.sort(key=lambda x: x[1], reverse=True)
+        top_symbols = [m[0] for m in gainers[:limit]]
         print(f"🔥 تم جلب أعلى {len(top_symbols)} عملات في الفيوتشرز بنجاح: {top_symbols[:5]}...", flush=True)
         return top_symbols
-        
+
     except Exception as e:
         print(f"❌ خطأ أثناء جلب فيوتشرز بينانس: {e}", flush=True)
         return []
@@ -203,12 +209,12 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started for Futures Top Gainers.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار لأعلى العملات في فيوتشرز بينانس.")
+print("🚀 Radar Started for Futures Top Gainers via Proxy.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار لأعلى العملات في فيوتشرز بينانس (عبر الوسيط).")
 
 last_movers_update = 0
 top_symbols_cache = []
-UPDATE_INTERVAL = 10 * 60  # تحديث القائمة كل 10 دقائق
+UPDATE_INTERVAL = 10 * 60
 
 while True:
     try:
