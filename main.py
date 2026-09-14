@@ -40,8 +40,8 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# دالة لجلب أعلى العملات في الفيوتشرز حسب الفوليوم بأمان (تم رفع العدد إلى 100)
-def get_top_volume_futures(limit=100):
+# دالة لجلب أعلى 100 عملة بناءً على أعلى نسبة تغير مئوي خلال 24 ساعة في الفيوتشرز
+def get_top_change_futures(limit=100):
     try:
         exchange.load_markets()
         tickers = exchange.fetch_tickers()
@@ -49,15 +49,19 @@ def get_top_volume_futures(limit=100):
         
         for symbol, ticker in tickers.items():
             if symbol.endswith('/USDT:USDT') or (symbol.endswith('/USDT') and 'swap' in exchange.market(symbol).get('type', '')):
-                quote_volume = ticker.get('quoteVolume', 0) or 0
+                # جلب نسبة التغير خلال 24 ساعة (percentage)
+                change_pct = ticker.get('percentage', 0)
+                if change_pct is None:
+                    change_pct = 0
                 clean_symbol = symbol.split(':')[0]
-                valid_symbols.append((clean_symbol, quote_volume))
+                valid_symbols.append((clean_symbol, float(change_pct)))
         
+        # ترتيب العملات تنازلياً حسب أعلى نسبة تغير مئوي (من الأعلى إيجاباً إلى الأقل)
         valid_symbols.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [item[0] for item in valid_symbols[:limit]]
         return top_symbols
     except Exception as e:
-        print(f"Error fetching top volume symbols: {e}", flush=True)
+        print(f"Error fetching top change symbols: {e}", flush=True)
         return []
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
@@ -196,17 +200,16 @@ def check_strategy_2(symbol, tf):
 
 
 print("🚀 Radar Starting...", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار بنجاح.")
+send_telegram_message("🚀 تم تشغيل الرادار بنظام أعلى 100 عملة حسب التغير المئوي 24h.")
 
 while True:
     try:
-        active_symbols = get_top_volume_futures(limit=100)
+        active_symbols = get_top_change_futures(limit=100)
         if not active_symbols:
             time.sleep(15)
             continue
 
-        # طباعة قائمة العملات التي يتم فحصها حالياً في الـ Logs
-        print(f"📋 Scanning Top {len(active_symbols)} Symbols: {active_symbols}", flush=True)
+        print(f"📋 Scanning Top {len(active_symbols)} Symbols by 24h % Change: {active_symbols}", flush=True)
 
         for symbol in active_symbols:
             for tf in TIMEFRAMES:
@@ -222,7 +225,7 @@ while True:
                 
                 time.sleep(0.3)
         
-        print("--- Cycle Finished. Refreshing Top Volume & Restarting ---", flush=True)
+        print("--- Cycle Finished. Refreshing Top Change & Restarting ---", flush=True)
         time.sleep(10)
     except Exception as e:
         print(f"Main Loop Error: {e}", flush=True)
