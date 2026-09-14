@@ -43,19 +43,30 @@ exchange = ccxt.binance({
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
 
-# --- دالة لجلب أكثر العملات تحركاً في آخر 24 ساعة ---
+# --- دالة لجلب أكثر العملات تحركاً عبر API مباشر لبينانس ---
 def get_top_volatile_symbols(limit=30):
     try:
-        tickers = exchange.fetch_tickers()
+        print("📡 جاري طلب التيكرات من بينانس مباشرة...", flush=True)
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code != 200:
+            print(f"❌ بينانس ردت بكود خطأ: {response.status_code} - {response.text}", flush=True)
+            return []
+            
+        data = response.json()
         movers = []
-        for symbol, data in tickers.items():
-            if symbol.endswith('/USDT') and 'percentage' in data and data['percentage'] is not None:
-                pct = abs(float(data['percentage']))
-                movers.append((symbol, pct))
+        for item in data:
+            symbol = item.get('symbol', '')
+            if symbol.endswith('USDT'):
+                # تحويل تنسيق symbol من BTCUSDT إلى BTC/USDT ليتوافق مع ccxt
+                ccxt_symbol = symbol[:-4] + '/USDT'
+                pct = abs(float(item.get('priceChangePercent', 0)))
+                movers.append((ccxt_symbol, pct))
         
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
-        print(f"🔥 تم اختيار أهم {len(top_symbols)} عملات متحركة في 24 ساعة.", flush=True)
+        print(f"🔥 تم اختيار أهم {len(top_symbols)} عملات متحركة في 24 ساعة بنجاح.", flush=True)
         return top_symbols
     except Exception as e:
         print(f"⚠️ خطأ أثناء جلب التيكرات: {e}", flush=True)
@@ -207,6 +218,7 @@ while True:
             last_movers_update = current_time
 
         if not top_symbols_cache:
+            print("⏳ لا توجد عملات في القائمة، إعادة المحاولة بعد 15 ثانية...", flush=True)
             time.sleep(15)
             continue
 
