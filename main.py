@@ -55,7 +55,6 @@ def get_top_futures_gainers(limit=30):
         seen_symbols = set()
         
         for raw_symbol, data in tickers.items():
-            # تطبيع اسم العملة (مثال: BTC/USDT:USDT تصبح BTC/USDT)
             symbol = raw_symbol.split(':')[0]
             if symbol.endswith('/USDT') and symbol not in seen_symbols:
                 pct = data.get('percentage')
@@ -215,4 +214,39 @@ last_movers_update = 0
 top_symbols_cache = []
 UPDATE_INTERVAL = 10 * 60  # تحديث القائمة كل 10 دقائق
 
-while > True:
+while True:
+    try:
+        current_time = time.time()
+        if (current_time - last_movers_update) > UPDATE_INTERVAL or not top_symbols_cache:
+            top_symbols_cache = get_top_futures_gainers(limit=30)
+            last_movers_update = current_time
+
+        if not top_symbols_cache:
+            print("⏳ القائمة فارغة حالياً، إعادة المحاولة بعد 15 ثانية...", flush=True)
+            time.sleep(15)
+            continue
+
+        print(f"📋 بدء فحص {len(top_symbols_cache)} عملة من فيوتشرز بايبيت...", flush=True)
+
+        for index, symbol in enumerate(top_symbols_cache, 1):
+            for tf in TIMEFRAMES:
+                print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
+                
+                if check_logic(symbol, tf):
+                    alert_msg = f"🎯 *تنبيه رادار بايبيت فيوتشرز (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    print(f"ALERT FOUND (Strategy 1): {symbol} | {tf}", flush=True)
+                    send_telegram_message(alert_msg)
+
+                if check_strategy_2(symbol, tf):
+                    alert_msg = f"🔥 *تنبيه رادار بايبيت فيوتشرز (استراتيجية 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    print(f"ALERT FOUND (Strategy 2): {symbol} | {tf}", flush=True)
+                    send_telegram_message(alert_msg)
+                
+                time.sleep(0.4)
+        
+        print("--- اكتملت دورة الفحص. انتظار قليل ---", flush=True)
+        time.sleep(10)
+
+    except Exception as e:
+        print(f"❌ Main Loop Error: {e}", flush=True)
+        time.sleep(20)
