@@ -40,35 +40,21 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# --- دالة خفيفة جداً لجلب أعلى العملات ارتفاعاً بدون إجهاد الـ Rate Limit ---
-def get_top_gainers_futures(limit=200):
+# --- دالة لجلب جميع عملات الفيوتشرز (USDT) بشكل كامل دون ترتيب أو تصفية بالنسب ---
+def get_all_usdt_futures_symbols():
     try:
-        print("⏳ جاري جلب قائمة التغير 24 ساعة من بينانس (طريقة خفيفة)...", flush=True)
-        # استخدام الطلب المباشر والخفيف من API الفيوتشرز الخاص ببينانس (24hr Ticker Price Change)
-        tickers_data = exchange.fapiPublicGetTicker24hr()
+        print("⏳ جاري تحميل أسواق الفيوتشرز من بينانس...", flush=True)
+        exchange.load_markets()
+        symbols = []
+        for symbol, market in exchange.markets.items():
+            # التأكد أنه عقد دائم Linear Swap وأنه زوج USDT
+            if market.get('linear') and market.get('swap') and symbol.endswith('/USDT'):
+                symbols.append(symbol)
         
-        valid_symbols = []
-        for item in tickers_data:
-            symbol = item.get('symbol', '')
-            # التصفية لأزواج USDT الدائمة فقط
-            if symbol.endswith('USDT'):
-                try:
-                    price_change_percent = float(item.get('priceChangePercent', -9999))
-                    # تحويل الاسم لصيغة CCXT القياسية (مثل BTC/USDT)
-                    formatted_symbol = symbol[:-4] + '/USDT'
-                    valid_symbols.append((formatted_symbol, price_change_percent))
-                except (ValueError, TypeError):
-                    continue
-
-        # ترتيب العملات من الأعلى ارتفاعاً إلى الأقل
-        valid_symbols.sort(key=lambda x: x[1], reverse=True)
-        top_symbols = [item[0] for item in valid_symbols[:limit]]
-        
-        print(f"✅ تم جلب أعلى {len(top_symbols)} عملة بنجاح واستقرار.", flush=True)
-        return top_symbols
-
+        print(f"✅ تم العثور على {len(symbols)} عملة فيوتشرز.", flush=True)
+        return symbols
     except Exception as e:
-        print(f"❌ خطأ أثناء جلب العملات بالطريقة الخفيفة: {e}", flush=True)
+        print(f"❌ خطأ أثناء تحميل الأسواق: {e}", flush=True)
         return []
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
@@ -206,19 +192,19 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Lightweight Top 200 Gainers Fetching.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار (أعلى 200 عملة بدالة جلب خفيفة جداً).")
+print("🚀 Radar Started for All USDT Futures Markets.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار لفحص جميع عملات الفيوتشرز (USDT) بدون تصفية بالنسب.")
 
 while True:
     try:
-        active_symbols = get_top_gainers_futures(limit=200)
+        active_symbols = get_all_usdt_futures_symbols()
         
         if not active_symbols:
-            print("⚠️ القائمة فارغة، سيعيد المحاولة بعد 10 ثوانٍ...", flush=True)
-            time.sleep(10)
+            print("⚠️ لم يتم العثور على عملات، سيتم الانتظار 15 ثانية وإعادة المحاولة...", flush=True)
+            time.sleep(15)
             continue
 
-        print(f"📋 تم تحميل {len(active_symbols)} عملة. بدء الفحص للـ 7 فريمات...", flush=True)
+        print(f"📋 بدء فحص {len(active_symbols)} عملة...", flush=True)
 
         for index, symbol in enumerate(active_symbols, 1):
             for tf in TIMEFRAMES:
@@ -236,8 +222,8 @@ while True:
                 
                 time.sleep(0.4)
         
-        print("--- اكتملت الدورة. إعادات جلب أعلى 200 عملة والبدء من جديد ---", flush=True)
-        time.sleep(10)
+        print("--- اكتملت الدورة. استراحة قليلة وإعادة الفحص ---", flush=True)
+        time.sleep(15)
 
     except Exception as e:
         print(f"❌ Main Loop Error: {e}", flush=True)
