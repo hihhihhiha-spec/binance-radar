@@ -1,3 +1,4 @@
+import sys
 import ccxt
 import time
 import os
@@ -46,22 +47,26 @@ def get_top_gainers_futures(limit=200):
         exchange.load_markets()
         print("⏳ جاري جلب أسعار التغير (Tickers)...", flush=True)
         tickers = exchange.fetch_tickers()
-        valid_symbols = []
+        print(f"📊 تم استقبال {len(tickers)} تيكر من بينانس", flush=True)
         
+        valid_symbols = []
         for symbol, ticker in tickers.items():
-            if symbol.endswith('/USDT:USDT') or (symbol.endswith('/USDT') and exchange.market(symbol).get('swap', False)):
-                percentage = ticker.get('percentage', 0)
-                if percentage is None:
-                    percentage = -999999
-                clean_symbol = symbol.split(':')[0]
-                valid_symbols.append((clean_symbol, float(percentage)))
+            try:
+                market = exchange.market(symbol)
+                if market.get('linear') and market.get('swap'):
+                    percentage = ticker.get('percentage')
+                    if percentage is None:
+                        percentage = -999999
+                    valid_symbols.append((symbol, float(percentage)))
+            except Exception:
+                continue
         
         valid_symbols.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [item[0] for item in valid_symbols[:limit]]
-        print(f"✅ تم جلب أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
+        print(f"✅ تم تصفية أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
         return top_symbols
     except Exception as e:
-        print(f"❌ Error fetching top gainers symbols: {e}", flush=True)
+        print(f"❌ بالتحديد خطأ جلب العملات هو: {e}", flush=True)
         return []
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
