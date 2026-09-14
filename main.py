@@ -1,3 +1,4 @@
+import sys
 import ccxt
 import time
 import os
@@ -39,42 +40,39 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# --- 3. قائمة العملات ---
-MY_SYMBOLS = [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'LINK/USDT', 'LTC/USDT',
-    'NEAR/USDT', 'MATIC/USDT', 'OP/USDT', 'ARB/USDT', 'DOGE/USDT', 'SHIB/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
-    'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT', 'HBAR/USDT', 'ALGO/USDT', 'FIL/USDT', 'ICP/USDT', 'GRT/USDT', 'STX/USDT',
-    'INJ/USDT', 'RNDR/USDT', 'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'TAO/USDT', 'THETA/USDT', 'EGLD/USDT', 'AAVE/USDT', 'UNI/USDT',
-    'SUSHI/USDT', 'DYDX/USDT', 'CRV/USDT', 'MKR/USDT', 'LDO/USDT', 'PENDLE/USDT', 'ENS/USDT', 'ID/USDT', 'MAV/USDT', 'EDU/USDT',
-    'GALA/USDT', 'ORDI/USDT', '1000SATS/USDT', 'BEAMX/USDT', 'PYTH/USDT', 'JUP/USDT', 'STRK/USDT', 'DYM/USDT', 'MANTA/USDT', 'ALT/USDT',
-    'ZETA/USDT', 'PIXEL/USDT', 'RONIN/USDT', 'AXS/USDT', 'SAND/USDT', 'MANA/USDT', 'IMX/USDT', 'FLOW/USDT', 'CHZ/USDT', 'ENJ/USDT',
-    'YGG/USDT', 'ILV/USDT', 'MAGIC/USDT', 'RUNE/USDT', 'KAS/USDT', 'TWT/USDT', 'GAS/USDT', 'NEO/USDT', 'QTUM/USDT', 'VET/USDT',
-    'CFX/USDT', 'KAVA/USDT', 'IOTA/USDT', 'ZIL/USDT', 'ONT/USDT', 'BAT/USDT', 'MASK/USDT', 'LRC/USDT', 'ANKR/USDT', 'LPT/USDT',
-    'BLUR/USDT', 'JOE/USDT', 'MINA/USDT', 'WOO/USDT', 'ASTR/USDT', 'GLMR/USDT', 'METIS/USDT', 'QNT/USDT', 'GMX/USDT', 'SNX/USDT',
-    '1INCH/USDT', 'ALICE/USDT', 'ALPHA/USDT', 'AMB/USDT', 'APE/USDT', 'API3/USDT', 'AR/USDT', 'ARK/USDT', 'ARKM/USDT', 'ARPA/USDT',
-    'ATA/USDT', 'ATOM/USDT', 'AUCTION/USDT', 'AUDIO/USDT', 'AXL/USDT', 'BAKE/USDT', 'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT',
-    'BIGTIME/USDT', 'BLZ/USDT', 'BNX/USDT', 'BSV/USDT', 'BSW/USDT', 'C98/USDT', 'CAKE/USDT', 'CELO/USDT', 'CELR/USDT', 'COMBO/USDT',
-    'COMP/USDT', 'COTI/USDT', 'CTK/USDT', 'CTSI/USDT', 'CVP/USDT', 'DAR/USDT', 'DASH/USDT', 'DATA/USDT', 'DENT/USDT', 'DGB/USDT',
-    'DOCK/USDT', 'DODO/USDT', 'DUSK/USDT', 'EPX/USDT', 'ERN/USDT', 'ETC/USDT', 'FLM/USDT', 'FRONT/USDT', 'FTM/USDT', 'FXS/USDT',
-    'GAL/USDT', 'GHST/USDT', 'GLM/USDT', 'GMT/USDT', 'GNO/USDT', 'GTC/USDT', 'HARD/USDT', 'HFT/USDT', 'HIGH/USDT', 'HOOK/USDT',
-    'HOT/USDT', 'ICX/USDT', 'IDEX/USDT', 'IOTX/USDT', 'KEY/USDT', 'KNC/USDT', 'KSM/USDT', 'LINA/USDT', 'LOOM/USDT', 'LQTY/USDT',
-    'LSK/USDT', 'LUNC/USDT', 'LUNA/USDT', 'MDT/USDT', 'MOVR/USDT', 'MTL/USDT', 'NKN/USDT', 'NMR/USDT', 'NTRN/USDT', 'NULS/USDT',
-    'OGN/USDT', 'OMG/USDT', 'ONG/USDT', 'OXT/USDT', 'PAXG/USDT', 'PERP/USDT', 'PHB/USDT', 'PIVX/USDT', 'POL/USDT', 'POLS/USDT',
-    'POWR/USDT', 'PROS/USDT', 'PSG/USDT', 'PUNDIX/USDT', 'PYR/USDT', 'QI/USDT', 'QUICK/USDT', 'RAD/USDT', 'RARE/USDT', 'RAY/USDT',
-    'REEF/USDT', 'REI/USDT', 'REN/USDT', 'REQ/USDT', 'RIF/USDT', 'RLC/USDT', 'ROSE/USDT', 'RSR/USDT', 'RSS3/USDT', 'RVN/USDT',
-    'SCRT/USDT', 'SFP/USDT', 'SKL/USDT', 'SLP/USDT', 'SNT/USDT', 'SPELL/USDT', 'STEEM/USDT', 'STG/USDT', 'STMX/USDT', 'STORJ/USDT',
-    'STPT/USDT', 'STRAX/USDT', 'SUN/USDT', 'SXP/USDT', 'SYS/USDT', 'T/USDT', 'TLM/USDT', 'TRB/USDT', 'TRU/USDT', 'TRX/USDT',
-    'UMA/USDT', 'UNFI/USDT', 'USTC/USDT', 'VGX/USDT', 'VIC/USDT', 'VIDT/USDT', 'VITE/USDT', 'VTHO/USDT', 'WAN/USDT', 'WAVES/USDT',
-    'WAXP/USDT', 'WIN/USDT', 'WLD/USDT', 'WRX/USDT', 'XEC/USDT', 'XEM/USDT', 'XLM/USDT', 'XMR/USDT', 'XNO/USDT', 'XVS/USDT',
-    'XWG/USDT', 'XZE/USDT', 'YFI/USDT', 'YFII/USDT', 'ZEN/USDT', 'ZRX/USDT', 'AEVO/USDT', 'NFP/USDT', 'XAI/USDT', 'AI/USDT',
-    'MYRO/USDT', 'PORTAL/USDT', 'VANRY/USDT', 'GNS/USDT', '1000BONK/USDT', 'SATS/USDT', 'ORDI/USDT', 'RATS/USDT'
-]
+# --- متغيرات نظام التخزين المؤقت (Cache) لقائمة العملات ---
+cached_symbols = []
+last_fetch_time = 0
+CACHE_DURATION = 2 * 60 * 60  # ساعتين بالثواني (7200 ثانية)
+
+def get_cached_symbols():
+    global cached_symbols, last_fetch_time
+    current_time = time.time()
+    
+    # إذا كانت القائمة فارغة أو مر عليها ساعتان، نقوم بجلبها من جديد
+    if not cached_symbols or (current_time - last_fetch_time) > CACHE_DURATION:
+        try:
+            print("⏳ جاري تحديث قائمة عملات الفيوتشرز من بينانس (كل ساعتين)...", flush=True)
+            exchange.load_markets()
+            symbols = []
+            for symbol, market in exchange.markets.items():
+                if market.get('linear') and market.get('swap') and symbol.endswith('/USDT'):
+                    symbols.append(symbol)
+            
+            if symbols:
+                cached_symbols = symbols
+                last_fetch_time = current_time
+                print(f"✅ تم تحديث وتخزين {len(cached_symbols)} عملة بنجاح.", flush=True)
+        except Exception as e:
+            print(f"⚠️ فشل تحديث القائمة بسبب: {e}", flush=True)
+            # إذا فشل الجلب (مثلاً IP لا يزال محظوراً مؤقتاً)، سنستمر بالقائمة القديمة إن وجدت
+    
+    return cached_symbols
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
-
 sent_alerts = {}
 
-# --- الاستراتيجية الأولى (بدون أي تعديل) ---
+# --- الاستراتيجية الأولى ---
 def check_logic(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=6)
@@ -84,13 +82,11 @@ def check_logic(symbol, tf):
         for i in range(len(bars) - 4):
             c1, c2, c3, c4, c5 = bars[i], bars[i+1], bars[i+2], bars[i+3], bars[i+4]
             
-            # --- تفكيك الشمعة 1 ---
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
             lower_wick1 = min(o1, cl1) - l1
 
-            # --- تفكيك الشمعة 2 ---
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
@@ -100,7 +96,6 @@ def check_logic(symbol, tf):
             is_full_red_2 = is_red_2 and (body2 > range2 * 0.45)
             cond_reds = is_red_1 and is_full_red_2 and (body2 > body1) and (lower_wick2 > lower_wick1)
 
-            # --- تفكيك الشمعة 3 ---
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
@@ -114,12 +109,10 @@ def check_logic(symbol, tf):
             body2_middle = (body2_top + body2_bottom) / 2
             is_c3_close_in_middle = abs(cl3 - body2_middle) <= (body2 * 0.25)
 
-            # --- تفكيك الشمعة 4 ---
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             is_green_4 = cl4 > o4
             is_c4_break = is_green_4 and (cl4 > h3)
 
-            # --- تفكيك الشمعة 5 ---
             o5, h5, l5, cl5 = c5[1], c5[2], c5[3], c5[4]
             is_red_5 = cl5 < o5
             body5 = abs(o5 - cl5)
@@ -151,12 +144,11 @@ def check_logic(symbol, tf):
                     return True
                 
         return False
-    except Exception as e:
-        print(f"Error checking {symbol} on {tf} (s1): {e}", flush=True)
+    except Exception:
         return False
 
 
-# --- الاستراتيجية الثانية (معدلة ومشددة بالكامل) ---
+# --- الاستراتيجية الثانية ---
 def check_strategy_2(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -166,7 +158,6 @@ def check_strategy_2(symbol, tf):
         for i in range(len(bars) - 3):
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            # الشمعة 1: حمراء وممتلئة جداً (أكثر من 50% من طولها جسم)
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
@@ -174,7 +165,6 @@ def check_strategy_2(symbol, tf):
             is_full_1 = is_red_1 and (range1 > 0 and body1 > range1 * 0.5)
             lower_wick1 = min(o1, cl1) - l1
 
-            # الشمعة 2: حمراء ممتلئة، حجمها أصغر من 1، وديلها السفلي أصغر من 1
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
@@ -184,16 +174,14 @@ def check_strategy_2(symbol, tf):
             
             cond_c2 = is_full_2 and (body2 < body1) and (lower_wick2 < lower_wick1)
 
-            # الشمعة 3: خضراء ممتلئة، تكسر أعلى شمعة 2، وديلها السفلي لا يتعدى قاع شمعة 2
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             body3 = abs(o3 - cl3)
             range3 = h3 - l3
             is_full_3 = is_green_3 and (range3 > 0 and body3 > range3 * 0.5)
-            is_break_3 = cl3 > h2  # إغلاق صريح فوق قمة شمعة 2
-            is_wick_c3_valid = l3 >= l2  # الديل السفلي للخضراء لا ينزل تحت قاع الحمراء الثانية
+            is_break_3 = cl3 > h2
+            is_wick_c3_valid = l3 >= l2
 
-            # الشمعة 4: حمراء داخل الشمعة الخضراء، وإغلاق فوق نصف الشمعة الخضراء
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             is_red_4 = cl4 < o4
             is_inside_c3 = (h4 <= h3 and l4 >= l3)
@@ -212,34 +200,41 @@ def check_strategy_2(symbol, tf):
                     return True
 
         return False
-    except Exception as e:
-        print(f"Error checking {symbol} on {tf} (s2): {e}", flush=True)
+    except Exception:
         return False
 
 
-print(f"🚀 Radar Started with 2 Strategies: {len(MY_SYMBOLS)} symbols.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار بالاستراتيجيتين (المُعدّلة والمشددة) بنجاح.")
+print("🚀 Radar Started with 2-Hour Caching System.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار بنظام التخزين المؤقت لقائمة العملات (تحديث كل ساعتين).")
 
 while True:
     try:
-        for index, symbol in enumerate(MY_SYMBOLS, 1):
+        active_symbols = get_cached_symbols()
+        
+        if not active_symbols:
+            print("⚠️ لا توجد عملات في القائمة، سيتم الانتظار 15 ثانية وإعادة المحاولة...", flush=True)
+            time.sleep(15)
+            continue
+
+        print(f"📋 بدء فحص {len(active_symbols)} عملة...", flush=True)
+
+        for index, symbol in enumerate(active_symbols, 1):
             for tf in TIMEFRAMES:
-                # فحص الاستراتيجية الأولى
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND (Strategy 1): {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
 
-                # فحص الاستراتيجية الثانية
                 if check_strategy_2(symbol, tf):
                     alert_msg = f"🔥 *تنبيه رادار بينانس (استراتيجية 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND (Strategy 2): {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
                 
-                time.sleep(0.3)
+                time.sleep(0.4)
         
-        print("--- Cycle Finished. Restarting Now ---", flush=True)
+        print("--- اكتملت دورة فحص جميع العملات. انتظار قليل قبل الدورة التالية ---", flush=True)
         time.sleep(10)
+
     except Exception as e:
-        print(f"Main Loop Error: {e}", flush=True)
-        time.sleep(30)
+        print(f"❌ Main Loop Error: {e}", flush=True)
+        time.sleep(20)
