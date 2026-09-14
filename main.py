@@ -34,48 +34,47 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات بينانس ---
-exchange = ccxt.binance({
-    'options': {'defaultType': 'future'},
+# --- 2. إعدادات بايبيت فيوتشرز (Bybit USDT Linear Perpetual) ---
+exchange = ccxt.bybit({
+    'options': {
+        'defaultType': 'linear',  # عقود الفيوتشرز USDT Linear في بايبيت
+    },
     'enableRateLimit': True
 })
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
 
-# --- دالة لجلب أعلى العملات في فيوتشرز بينانس عبر بركسي وسيط لتجاوز الحظر ---
+# --- دالة لجلب أعلى العملات صعوداً في فيوتشرز بايبيت ديناميكياً ---
 def get_top_futures_gainers(limit=30):
     try:
-        print("📡 جاري جلب تيكرات فيوتشرز بينانس عبر الوسيط...", flush=True)
-        # استخدام بروكسي عام يمرر الطلب لبينانس فيوتشرز مباشرة
-        target_url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        proxy_url = f"https://api.allorigins.win/raw?url={requests.utils.quote(target_url)}"
+        print("📡 جاري جلب تيكرات فيوتشرز بايبيت (Bybit Linear)...", flush=True)
+        tickers = exchange.fetch_tickers()
         
-        response = requests.get(proxy_url, timeout=15)
-        if response.status_code != 200:
-            print(f"⚠️ فشل الجلب عبر الوسيط، كود الرد: {response.status_code}", flush=True)
+        movers = []
+        seen_symbols = set()
+        
+        for raw_symbol, data in tickers.items():
+            # تطبيع اسم العملة (مثال: BTC/USDT:USDT تصبح BTC/USDT)
+            symbol = raw_symbol.split(':')[0]
+            if symbol.endswith('/USDT') and symbol not in seen_symbols:
+                pct = data.get('percentage')
+                if pct is not None:
+                    seen_symbols.add(symbol)
+                    movers.append((symbol, float(pct)))
+        
+        if not movers:
+            print("⚠️ لم يتم استرجاع أي بيانات للفيوتشرز من بايبيت.", flush=True)
             return []
 
-        data = response.json()
-        gainers = []
-        for item in data:
-            symbol = item.get('symbol', '')
-            if symbol.endswith('USDT'):
-                ccxt_symbol = symbol[:-4] + '/USDT'
-                try:
-                    pct = float(item.get('priceChangePercent', 0))
-                    gainers.append((ccxt_symbol, pct))
-                except:
-                    pass
-
         # ترتيب تنازلي حسب أعلى نسبة صعود في 24 ساعة
-        gainers.sort(key=lambda x: x[1], reverse=True)
-        top_symbols = [m[0] for m in gainers[:limit]]
-        print(f"🔥 تم جلب أعلى {len(top_symbols)} عملات في الفيوتشرز بنجاح: {top_symbols[:5]}...", flush=True)
+        movers.sort(key=lambda x: x[1], reverse=True)
+        top_symbols = [m[0] for m in movers[:limit]]
+        print(f"🔥 تم جلب أعلى {len(top_symbols)} عملات في فيوتشرز بايبيت بنجاح: {top_symbols[:5]}...", flush=True)
         return top_symbols
-
+        
     except Exception as e:
-        print(f"❌ خطأ أثناء جلب فيوتشرز بينانس: {e}", flush=True)
+        print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
 # --- الاستراتيجية الأولى ---
@@ -209,46 +208,11 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started for Futures Top Gainers via Proxy.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار لأعلى العملات في فيوتشرز بينانس (عبر الوسيط).")
+print("🚀 Radar Started for Bybit Futures Top Gainers.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار لأعلى العملات في فيوتشرز بايبيت.")
 
 last_movers_update = 0
 top_symbols_cache = []
-UPDATE_INTERVAL = 10 * 60
+UPDATE_INTERVAL = 10 * 60  # تحديث القائمة كل 10 دقائق
 
-while True:
-    try:
-        current_time = time.time()
-        if (current_time - last_movers_update) > UPDATE_INTERVAL or not top_symbols_cache:
-            top_symbols_cache = get_top_futures_gainers(limit=30)
-            last_movers_update = current_time
-
-        if not top_symbols_cache:
-            print("⏳ القائمة فارغة حالياً، إعادة المحاولة بعد 15 ثانية...", flush=True)
-            time.sleep(15)
-            continue
-
-        print(f"📋 بدء فحص {len(top_symbols_cache)} عملة من الفيوتشرز...", flush=True)
-
-        for index, symbol in enumerate(top_symbols_cache, 1):
-            for tf in TIMEFRAMES:
-                print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
-                
-                if check_logic(symbol, tf):
-                    alert_msg = f"🎯 *تنبيه رادار بينانس فيوتشرز (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    print(f"ALERT FOUND (Strategy 1): {symbol} | {tf}", flush=True)
-                    send_telegram_message(alert_msg)
-
-                if check_strategy_2(symbol, tf):
-                    alert_msg = f"🔥 *تنبيه رادار بينانس فيوتشرز (استراتيجية 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    print(f"ALERT FOUND (Strategy 2): {symbol} | {tf}", flush=True)
-                    send_telegram_message(alert_msg)
-                
-                time.sleep(0.4)
-        
-        print("--- اكتملت دورة الفحص. انتظار قليل ---", flush=True)
-        time.sleep(10)
-
-    except Exception as e:
-        print(f"❌ Main Loop Error: {e}", flush=True)
-        time.sleep(20)
+while > True:
