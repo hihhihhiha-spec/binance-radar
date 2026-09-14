@@ -40,8 +40,8 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# دالة لجلب أعلى العملات في الفيوتشرز حسب الفوليوم بأمان
-def get_top_volume_futures(limit=60):
+# دالة لجلب أعلى العملات في الفيوتشرز حسب الفوليوم بأمان (تم رفع العدد إلى 100)
+def get_top_volume_futures(limit=100):
     try:
         exchange.load_markets()
         tickers = exchange.fetch_tickers()
@@ -200,10 +200,13 @@ send_telegram_message("🚀 تم تشغيل الرادار بنجاح.")
 
 while True:
     try:
-        active_symbols = get_top_volume_futures(limit=60)
+        active_symbols = get_top_volume_futures(limit=100)
         if not active_symbols:
             time.sleep(15)
             continue
+
+        # طباعة قائمة العملات التي يتم فحصها حالياً في الـ Logs
+        print(f"📋 Scanning Top {len(active_symbols)} Symbols: {active_symbols}", flush=True)
 
         for symbol in active_symbols:
             for tf in TIMEFRAMES:
