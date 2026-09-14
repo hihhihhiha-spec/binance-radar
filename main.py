@@ -40,7 +40,7 @@ exchange = ccxt.binance({
 })
 
 # --- دالة لجلب أعلى العملات حسب نسبة التغير المئوي لآخر 24 ساعة في الفيوتشرز ---
-def get_top_gainers_futures(limit=300):
+def get_top_gainers_futures(limit=180):
     try:
         exchange.load_markets()
         tickers = exchange.fetch_tickers()
@@ -54,7 +54,6 @@ def get_top_gainers_futures(limit=300):
                 clean_symbol = symbol.split(':')[0]
                 valid_symbols.append((clean_symbol, float(percentage)))
         
-        # الترتيب تنازلياً حسب نسبة التغير المئوية (الأعلى صعوداً أولاً)
         valid_symbols.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [item[0] for item in valid_symbols[:limit]]
         return top_symbols
@@ -62,7 +61,7 @@ def get_top_gainers_futures(limit=300):
         print(f"Error fetching top gainers symbols: {e}", flush=True)
         return []
 
-TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
+TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h']
 
 sent_alerts = {}
 
@@ -207,12 +206,12 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Top Gainers (24h Percentage) & 2 Strategies.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار (أعلى نسبة تغير مئوي 24 ساعة في الفيوتشرز) بنجاح.")
+print("🚀 Radar Started with Top 180 Gainers & 2 Strategies.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار (أعلى 180 عملة حسب التغير المئوي 24 ساعة) بنجاح.")
 
 while True:
     try:
-        active_symbols = get_top_gainers_futures(limit=300)
+        active_symbols = get_top_gainers_futures(limit=180)
         if not active_symbols:
             time.sleep(15)
             continue
@@ -235,10 +234,10 @@ while True:
                     print(f"ALERT FOUND (Strategy 2): {symbol} | {tf}", flush=True)
                     send_telegram_message(alert_msg)
                 
-                time.sleep(0.3)
+                time.sleep(0.4) # زيادة بسيطة للأمان من الحظر
         
         print("--- Cycle Finished. Refreshing Top Gainers & Restarting ---", flush=True)
-        time.sleep(10)
+        time.sleep(15)
     except Exception as e:
         print(f"Main Loop Error: {e}", flush=True)
         time.sleep(30)
