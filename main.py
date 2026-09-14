@@ -40,22 +40,34 @@ exchange = ccxt.binance({
     'enableRateLimit': True
 })
 
-# --- دالة لجلب جميع عملات الفيوتشرز (USDT) بشكل كامل دون ترتيب أو تصفية بالنسب ---
-def get_all_usdt_futures_symbols():
-    try:
-        print("⏳ جاري تحميل أسواق الفيوتشرز من بينانس...", flush=True)
-        exchange.load_markets()
-        symbols = []
-        for symbol, market in exchange.markets.items():
-            # التأكد أنه عقد دائم Linear Swap وأنه زوج USDT
-            if market.get('linear') and market.get('swap') and symbol.endswith('/USDT'):
-                symbols.append(symbol)
-        
-        print(f"✅ تم العثور على {len(symbols)} عملة فيوتشرز.", flush=True)
-        return symbols
-    except Exception as e:
-        print(f"❌ خطأ أثناء تحميل الأسواق: {e}", flush=True)
-        return []
+# --- متغيرات نظام التخزين المؤقت (Cache) لقائمة العملات ---
+cached_symbols = []
+last_fetch_time = 0
+CACHE_DURATION = 2 * 60 * 60  # ساعتين بالثواني (7200 ثانية)
+
+def get_cached_symbols():
+    global cached_symbols, last_fetch_time
+    current_time = time.time()
+    
+    # إذا كانت القائمة فارغة أو مر عليها ساعتان، نقوم بجلبها من جديد
+    if not cached_symbols or (current_time - last_fetch_time) > CACHE_DURATION:
+        try:
+            print("⏳ جاري تحديث قائمة عملات الفيوتشرز من بينانس (كل ساعتين)...", flush=True)
+            exchange.load_markets()
+            symbols = []
+            for symbol, market in exchange.markets.items():
+                if market.get('linear') and market.get('swap') and symbol.endswith('/USDT'):
+                    symbols.append(symbol)
+            
+            if symbols:
+                cached_symbols = symbols
+                last_fetch_time = current_time
+                print(f"✅ تم تحديث وتخزين {len(cached_symbols)} عملة بنجاح.", flush=True)
+        except Exception as e:
+            print(f"⚠️ فشل تحديث القائمة بسبب: {e}", flush=True)
+            # إذا فشل الجلب (مثلاً IP لا يزال محظوراً مؤقتاً)، سنستمر بالقائمة القديمة إن وجدت
+    
+    return cached_symbols
 
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
@@ -192,15 +204,15 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started for All USDT Futures Markets.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار لفحص جميع عملات الفيوتشرز (USDT) بدون تصفية بالنسب.")
+print("🚀 Radar Started with 2-Hour Caching System.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار بنظام التخزين المؤقت لقائمة العملات (تحديث كل ساعتين).")
 
 while True:
     try:
-        active_symbols = get_all_usdt_futures_symbols()
+        active_symbols = get_cached_symbols()
         
         if not active_symbols:
-            print("⚠️ لم يتم العثور على عملات، سيتم الانتظار 15 ثانية وإعادة المحاولة...", flush=True)
+            print("⚠️ لا توجد عملات في القائمة، سيتم الانتظار 15 ثانية وإعادة المحاولة...", flush=True)
             time.sleep(15)
             continue
 
@@ -208,8 +220,6 @@ while True:
 
         for index, symbol in enumerate(active_symbols, 1):
             for tf in TIMEFRAMES:
-                print(f"🔍 [فحص] {index}/{len(active_symbols)}: {symbol} | الفريم: {tf}", flush=True)
-                
                 if check_logic(symbol, tf):
                     alert_msg = f"🎯 *تنبيه رادار بينانس (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     print(f"ALERT FOUND (Strategy 1): {symbol} | {tf}", flush=True)
@@ -222,8 +232,8 @@ while True:
                 
                 time.sleep(0.4)
         
-        print("--- اكتملت الدورة. استراحة قليلة وإعادة الفحص ---", flush=True)
-        time.sleep(15)
+        print("--- اكتملت دورة فحص جميع العملات. انتظار قليل قبل الدورة التالية ---", flush=True)
+        time.sleep(10)
 
     except Exception as e:
         print(f"❌ Main Loop Error: {e}", flush=True)
