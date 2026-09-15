@@ -205,7 +205,7 @@ def check_strategy_2(symbol, tf):
     except Exception:
         return False
 
-# --- الاستراتيجية الثالثة المحدثة (حسب طلبك: 4 شموع بشروط الأجسام والذيول والدقة) ---
+# --- الاستراتيجية الثالثة ---
 def check_strategy_3(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -215,7 +215,6 @@ def check_strategy_3(symbol, tf):
         for i in range(len(bars) - 3):
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            # الشمعة الأولى (حمراء: جسم أكبر من الذيول)
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
@@ -223,7 +222,6 @@ def check_strategy_3(symbol, tf):
             lower_wick1 = min(o1, cl1) - l1
             is_body_larger_than_wicks1 = body1 > upper_wick1 and body1 > lower_wick1
             
-            # الشمعة الثانية (حمراء: جسم أصغر من الأولى، جسم أكبر من الذيول، وديلها السفلي أصغر من ديل الأولى)
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
@@ -233,12 +231,10 @@ def check_strategy_3(symbol, tf):
             
             cond_c2 = is_red_2 and (body2 < body1) and is_body_larger_than_wicks2 and (lower_wick2 < lower_wick1)
             
-            # الشمعة الثالثة (خضراء تكسر الشمعة الثانية وتغلق فوقها)
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             is_break_3 = is_green_3 and (cl3 > h2)
             
-            # الشمعة الرابعة (لونها لا يهم، الأهم أن تغلق فوق منتصف الشمعة الخضراء الثالثة)
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             green_middle_3 = (o3 + cl3) / 2
             is_close_above_middle_3 = cl4 > green_middle_3
@@ -259,9 +255,64 @@ def check_strategy_3(symbol, tf):
     except Exception:
         return False
 
+# --- الاستراتيجية الرابعة الجديدة (حسب وصفك الدقيق) ---
+def check_strategy_4(symbol, tf):
+    try:
+        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
+        if len(bars) < 4: 
+            return False
+        
+        for i in range(len(bars) - 3):
+            c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
+            
+            # 1. الشمعة الأولى: حمراء، حجم جسمها أكبر من ذيولها
+            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
+            is_red_1 = cl1 < o1
+            body1 = abs(o1 - cl1)
+            upper_wick1 = h1 - max(o1, cl1)
+            lower_wick1 = min(o1, cl1) - l1
+            is_body_larger_wicks_1 = body1 > upper_wick1 and body1 > lower_wick1
+            
+            # 2. الشمعة الثانية: حمراء، تكسر الأولى، أصغر منها حجماً
+            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
+            is_red_2 = cl2 < o2
+            body2 = abs(o2 - cl2)
+            is_smaller_red_2 = is_red_2 and (body2 < body1) and (l2 < l1)
+            
+            # 3. الشمعة الثالثة: خضراء، ذيلها السفلي لا يكسر تحت الثانية، تكسر الثانية، وتغلق في منتصف الأولى
+            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
+            is_green_3 = cl3 > o3
+            is_wick_safe_3 = l3 >= l2
+            is_break_3 = cl3 > h2
+            
+            middle_c1 = (o1 + cl1) / 2
+            # إغلاق الشمعة الثالثة قريب من منتصف الشمعة الأولى (ضمن نطاق معقول أو يساويه)
+            is_close_in_middle_1 = abs(cl3 - middle_c1) <= (body1 * 0.3)
+            
+            # 4. الشمعة الرابعة: تغلق فوق نصف الشمعة الخضراء الثالثة
+            o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
+            middle_c3 = (o3 + cl3) / 2
+            is_close_above_middle_3 = cl4 > middle_c3
 
-print("🚀 Radar Started with Updated Strategy 3 for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم تحديث الرادار: الاستراتيجية الثالثة تعمل الآن بالشروط الجديدة (أجسام وذيول واختراق منتصف الخضراء).")
+            if (is_red_1 and is_body_larger_wicks_1 and 
+                is_smaller_red_2 and 
+                is_green_3 and is_wick_safe_3 and is_break_3 and is_close_in_middle_1 and 
+                is_close_above_middle_3):
+                
+                candle_timestamp = c4[0]
+                alert_key = f"{symbol}_{tf}_{candle_timestamp}_s4"
+                
+                if alert_key not in sent_alerts:
+                    sent_alerts[alert_key] = True
+                    return True
+
+        return False
+    except Exception:
+        return False
+
+
+print("🚀 Radar Started with 4 Strategies for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار مع إضافة الاستراتيجية الرابعة الجديدة بنجاح!")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -294,7 +345,11 @@ while True:
                     send_telegram_message(alert_msg)
 
                 if check_strategy_3(symbol, tf):
-                    alert_msg = f"⚡ *تنبيه بايبيت (استراتيجية 3 المحدثة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"⚡ *تنبيه بايبيت (استراتيجية 3)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    send_telegram_message(alert_msg)
+
+                if check_strategy_4(symbol, tf):
+                    alert_msg = f"💎 *تنبيه بايبيت (استراتيجية 4 الجديدة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
