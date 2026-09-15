@@ -37,7 +37,7 @@ threading.Thread(target=run_port_server, daemon=True).start()
 # --- 2. إعدادات بايبيت فيوتشرز (Bybit USDT Linear Perpetual) ---
 exchange = ccxt.bybit({
     'options': {
-        'defaultType': 'linear',  # عقود الفيوتشرز USDT Linear في بايبيت
+        'defaultType': 'linear',
     },
     'enableRateLimit': True
 })
@@ -66,7 +66,6 @@ def get_top_futures_gainers(limit=150):
             print("⚠️ لم يتم استرجاع أي بيانات للفيوتشرز من بايبيت.", flush=True)
             return []
 
-        # ترتيب تنازلي حسب أعلى نسبة صعود في 24 ساعة
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
         print(f"🔥 تم جلب أعلى {len(top_symbols)} عملات في فيوتشرز بايبيت بنجاح.", flush=True)
@@ -199,7 +198,40 @@ def check_strategy_2(symbol, tf):
                 alert_key = f"{symbol}_{tf}_{candle_timestamp}_s2"
                 
                 if alert_key not in sent_alerts:
-                    sent_alerts[alert_Key] = True
+                    sent_alerts[alert_key] = True
+                    return True
+
+        return False
+    except Exception:
+        return False
+
+# --- الاستراتيجية الثالثة المعدلة (تتكون من شمعتين فقط: حمراء تليها خضراء قوية مخترقة) ---
+def check_strategy_3(symbol, tf):
+    try:
+        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=3)
+        if len(bars) < 2: 
+            return False
+        
+        for i in range(len(bars) - 1):
+            c1, c2 = bars[i], bars[i+1]
+            
+            # الشمعة الأولى: حمراء تصحيحية
+            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
+            is_red_1 = cl1 < o1
+            
+            # الشمعة الثانية: خضراء قوية تبتلع الحمراء وتخترق قمتها
+            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
+            is_green_2 = cl2 > o2
+            body2 = abs(o2 - cl2)
+            range2 = h2 - l2
+            is_strong_green_2 = is_green_2 and (body2 > range2 * 0.5) and (cl2 > h1)
+
+            if is_red_1 and is_strong_green_2:
+                candle_timestamp = c2[0]
+                alert_key = f"{symbol}_{tf}_{candle_timestamp}_s3"
+                
+                if alert_key not in sent_alerts:
+                    sent_alerts[alert_key] = True
                     return True
 
         return False
@@ -207,8 +239,8 @@ def check_strategy_2(symbol, tf):
         return False
 
 
-print("🚀 Radar Started for Bybit Futures Top Gainers (150 coins).", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار لأعلى 150 عملة في فيوتشرز بايبيت.")
+print("🚀 Radar Started with 3 Strategies (S3 is 2 candles) for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم تشغيل الرادار (الاستراتيجية الثالثة أصبحت تعتمد على شمعتين فقط للاختبار).")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -233,18 +265,20 @@ while True:
                 print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
                 
                 if check_logic(symbol, tf):
-                    alert_msg = f"🎯 *تنبيه رادار بايبيت فيوتشرز (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    print(f"ALERT FOUND (Strategy 1): {symbol} | {tf}", flush=True)
+                    alert_msg = f"🎯 *تنبيه بايبيت (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
 
                 if check_strategy_2(symbol, tf):
-                    alert_msg = f"🔥 *تنبيه رادار بايبيت فيوتشرز (استراتيجية 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    print(f"ALERT FOUND (Strategy 2): {symbol} | {tf}", flush=True)
+                    alert_msg = f"🔥 *تنبيه بايبيت (استراتيجية 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    send_telegram_message(alert_msg)
+
+                if check_strategy_3(symbol, tf):
+                    alert_msg = f"⚡ *تنبيه بايبيت (استراتيجية 3 الجديدة - شمعتان)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
         
-        print("--- اكتملت دورة الفحص. انتظار قليل ---", flush=Time)
+        print("--- اكتملت دورة الفحص. انتظار قليل ---", flush=True)
         time.sleep(10)
 
     except Exception as e:
