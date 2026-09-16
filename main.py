@@ -75,83 +75,8 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- الاستراتيجية الأولى ---
-def check_logic(symbol, tf):
-    try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=6)
-        if len(bars) < 5: 
-            return False
-        
-        for i in range(len(bars) - 4):
-            c1, c2, c3, c4, c5 = bars[i], bars[i+1], bars[i+2], bars[i+3], bars[i+4]
-            
-            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            is_red_1 = cl1 < o1
-            body1 = abs(o1 - cl1)
-            lower_wick1 = min(o1, cl1) - l1
-
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            is_red_2 = cl2 < o2
-            body2 = abs(o2 - cl2)
-            lower_wick2 = min(o2, cl2) - l2
-            range2 = h2 - l2
-            
-            is_full_red_2 = is_red_2 and (body2 > range2 * 0.45)
-            cond_reds = is_red_1 and is_full_red_2 and (body2 > body1) and (lower_wick2 > lower_wick1)
-
-            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
-            is_green_3 = cl3 > o3
-            body3 = abs(o3 - cl3)
-            range3 = h3 - l3
-            
-            is_full_green_3 = is_green_3 and (body3 > range3 * 0.4)
-            body2_top = max(o2, cl2)
-            body2_bottom = min(o2, cl2)
-            
-            is_c3_inside_body2 = (h3 <= body2_top) and (l3 >= body2_bottom)
-            body2_middle = (body2_top + body2_bottom) / 2
-            is_c3_close_in_middle = abs(cl3 - body2_middle) <= (body2 * 0.25)
-
-            o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
-            is_green_4 = cl4 > o4
-            is_c4_break = is_green_4 and (cl4 > h3)
-
-            o5, h5, l5, cl5 = c5[1], c5[2], c5[3], c5[4]
-            is_red_5 = cl5 < o5
-            body5 = abs(o5 - cl5)
-            range5 = h5 - l5
-            
-            body4_top = max(o4, cl4)
-            body4_bottom = min(o4, cl4)
-            
-            is_full_red_5 = is_red_5 and (body5 > range5 * 0.4)
-            is_c5_inside_body4 = (h5 <= body4_top) and (l5 >= body4_bottom)
-            
-            body4_middle = (body4_top + body4_bottom) / 2
-            is_c5_close_in_middle = abs(cl5 - body4_middle) <= (abs(o4 - cl4) * 0.25)
-            
-            upper_wick_4 = h4 - max(o4, cl4)
-            upper_wick_5 = h5 - max(o5, cl5)
-            is_upper_wick_smaller = upper_wick_5 < upper_wick_4
-
-            if (cond_reds and 
-                is_full_green_3 and is_c3_inside_body2 and is_c3_close_in_middle and 
-                is_c4_break and 
-                is_full_red_5 and is_c5_inside_body4 and is_c5_close_in_middle and is_upper_wick_smaller):
-                
-                candle_timestamp = c5[0]
-                alert_key = f"{symbol}_{tf}_{candle_timestamp}_s1"
-                
-                if alert_key not in sent_alerts:
-                    sent_alerts[alert_key] = True
-                    return True
-                
-        return False
-    except Exception:
-        return False
-
-# --- الاستراتيجية الثانية ---
-def check_strategy_2(symbol, tf):
+# --- الاستراتيجية الرابعة الصارمة فقط ---
+def check_strict_strategy_4(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
         if len(bars) < 4: 
@@ -160,118 +85,13 @@ def check_strategy_2(symbol, tf):
         for i in range(len(bars) - 3):
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            is_red_1 = cl1 < o1
-            body1 = abs(o1 - cl1)
-            range1 = h1 - l1
-            is_full_1 = is_red_1 and (range1 > 0 and body1 > range1 * 0.5)
-            lower_wick1 = min(o1, cl1) - l1
-
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            is_red_2 = cl2 < o2
-            body2 = abs(o2 - cl2)
-            range2 = h2 - l2
-            is_full_2 = is_red_2 and (range2 > 0 and body2 > range2 * 0.5)
-            lower_wick2 = min(o2, cl2) - l2
-            
-            cond_c2 = is_full_2 and (body2 < body1) and (lower_wick2 < lower_wick1)
-
-            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
-            is_green_3 = cl3 > o3
-            body3 = abs(o3 - cl3)
-            range3 = h3 - l3
-            is_full_3 = is_green_3 and (range3 > 0 and body3 > range3 * 0.5)
-            is_break_3 = cl3 > h2
-            is_wick_c3_valid = l3 >= l2
-
-            o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
-            is_red_4 = cl4 < o4
-            is_inside_c3 = (h4 <= h3 and l4 >= l3)
-            green_middle_3 = (o3 + cl3) / 2
-            is_close_above_middle_3 = cl4 > green_middle_3
-
-            if (is_full_1 and cond_c2 and 
-                is_full_3 and is_break_3 and is_wick_c3_valid and 
-                is_red_4 and is_inside_c3 and is_close_above_middle_3):
-                
-                candle_timestamp = c4[0]
-                alert_key = f"{symbol}_{tf}_{candle_timestamp}_s2"
-                
-                if alert_key not in sent_alerts:
-                    sent_alerts[alert_key] = True
-                    return True
-
-        return False
-    except Exception:
-        return False
-
-# --- الاستراتيجية الثالثة ---
-def check_strategy_3(symbol, tf):
-    try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
-        if len(bars) < 4: 
-            return False
-        
-        for i in range(len(bars) - 3):
-            c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
-            
+            # 1. الشمعة الأولى: حمراء صارمة (الجسم أكبر بوضوح من الذيول)
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
             upper_wick1 = h1 - max(o1, cl1)
             lower_wick1 = min(o1, cl1) - l1
-            is_body_larger_than_wicks1 = body1 > upper_wick1 and body1 > lower_wick1
-            
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            is_red_2 = cl2 < o2
-            body2 = abs(o2 - cl2)
-            upper_wick2 = h2 - max(o2, cl2)
-            lower_wick2 = min(o2, cl2) - l2
-            is_body_larger_than_wicks2 = body2 > upper_wick2 and body2 > lower_wick2
-            
-            cond_c2 = is_red_2 and (body2 < body1) and is_body_larger_than_wicks2 and (lower_wick2 < lower_wick1)
-            
-            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
-            is_green_3 = cl3 > o3
-            is_break_3 = is_green_3 and (cl3 > h2)
-            
-            o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
-            green_middle_3 = (o3 + cl3) / 2
-            is_close_above_middle_3 = cl4 > green_middle_3
-
-            if (is_red_1 and is_body_larger_than_wicks1 and 
-                cond_c2 and 
-                is_break_3 and 
-                is_close_above_middle_3):
-                
-                candle_timestamp = c4[0]
-                alert_key = f"{symbol}_{tf}_{candle_timestamp}_s3"
-                
-                if alert_key not in sent_alerts:
-                    sent_alerts[alert_key] = True
-                    return True
-
-        return False
-    except Exception:
-        return False
-
-# --- الاستراتيجية الرابعة الجديدة (حسب وصفك الدقيق) ---
-def check_strategy_4(symbol, tf):
-    try:
-        bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
-        if len(bars) < 4: 
-            return False
-        
-        for i in range(len(bars) - 3):
-            c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
-            
-            # 1. الشمعة الأولى: حمراء، حجم جسمها أكبر من ذيولها
-            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            is_red_1 = cl1 < o1
-            body1 = abs(o1 - cl1)
-            upper_wick1 = h1 - max(o1, cl1)
-            lower_wick1 = min(o1, cl1) - l1
-            is_body_larger_wicks_1 = body1 > upper_wick1 and body1 > lower_wick1
+            is_body_strict_1 = is_red_1 and (body1 > upper_wick1 * 1.5) and (body1 > lower_wick1 * 1.5)
             
             # 2. الشمعة الثانية: حمراء، تكسر الأولى، أصغر منها حجماً
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
@@ -279,28 +99,28 @@ def check_strategy_4(symbol, tf):
             body2 = abs(o2 - cl2)
             is_smaller_red_2 = is_red_2 and (body2 < body1) and (l2 < l1)
             
-            # 3. الشمعة الثالثة: خضراء، ذيلها السفلي لا يكسر تحت الثانية، تكسر الثانية، وتغلق في منتصف الأولى
+            # 3. الشمعة الثالثة: خضراء، ذيلها السفلي لا يكسر تحت الثانية، تكسر الثانية صعوداً، وتغلق في منتصف الأولى
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
             is_wick_safe_3 = l3 >= l2
             is_break_3 = cl3 > h2
             
             middle_c1 = (o1 + cl1) / 2
-            # إغلاق الشمعة الثالثة قريب من منتصف الشمعة الأولى (ضمن نطاق معقول أو يساويه)
-            is_close_in_middle_1 = abs(cl3 - middle_c1) <= (body1 * 0.3)
+            is_close_in_middle_1 = abs(cl3 - middle_c1) <= (body1 * 0.2)
             
-            # 4. الشمعة الرابعة: تغلق فوق نصف الشمعة الخضراء الثالثة
+            # 4. الشمعة الرابعة: تغلق فوق نصف الشمعة الخضراء الثالثة بصرامة
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
+            body3 = abs(o3 - cl3)
             middle_c3 = (o3 + cl3) / 2
             is_close_above_middle_3 = cl4 > middle_c3
 
-            if (is_red_1 and is_body_larger_wicks_1 and 
+            if (is_body_strict_1 and 
                 is_smaller_red_2 and 
                 is_green_3 and is_wick_safe_3 and is_break_3 and is_close_in_middle_1 and 
                 is_close_above_middle_3):
                 
                 candle_timestamp = c4[0]
-                alert_key = f"{symbol}_{tf}_{candle_timestamp}_s4"
+                alert_key = f"{symbol}_{tf}_{candle_timestamp}_strict_s4"
                 
                 if alert_key not in sent_alerts:
                     sent_alerts[alert_key] = True
@@ -311,8 +131,8 @@ def check_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with 4 Strategies for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم تشغيل الرادار مع إضافة الاستراتيجية الرابعة الجديدة بنجاح!")
+print("🚀 Radar Started with Strict Strategy 4 Only for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم تحديث الرادار: العمل الآن بالاستراتيجية الرابعة الصارمة فقط.")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -336,20 +156,8 @@ while True:
             for tf in TIMEFRAMES:
                 print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
                 
-                if check_logic(symbol, tf):
-                    alert_msg = f"🎯 *تنبيه بايبيت (استراتيجية 1)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    send_telegram_message(alert_msg)
-
-                if check_strategy_2(symbol, tf):
-                    alert_msg = f"🔥 *تنبيه بايبيت (استراتيجية 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    send_telegram_message(alert_msg)
-
-                if check_strategy_3(symbol, tf):
-                    alert_msg = f"⚡ *تنبيه بايبيت (استراتيجية 3)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
-                    send_telegram_message(alert_msg)
-
-                if check_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (استراتيجية 4 الجديدة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                if check_strict_strategy_4(symbol, tf):
+                    alert_msg = f"💎 *تنبيه بايبيت (الاستراتيجية الرابعة الصارمة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
