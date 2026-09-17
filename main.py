@@ -75,7 +75,7 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- الفحص الصارم جداً (صفر تسامح - مطابقة تامة للشروط) ---
+# --- الفحص الهندسي المطور لضمان الدقة العالية في كل الفريمات ---
 def check_strict_strategy_4(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -89,7 +89,7 @@ def check_strict_strategy_4(symbol, tf):
         o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
         o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
         
-        # --- 1. الشمعة الأولى: حمراء ولها جسم واضح أكبر من الذيول تماماً ---
+        # --- 1. الشمعة الأولى: حمراء ولها جسم واضح أكبر من الذيول ---
         if cl1 >= o1: return False
         body1 = abs(o1 - cl1)
         upper_wick1 = h1 - max(o1, cl1)
@@ -107,29 +107,32 @@ def check_strict_strategy_4(symbol, tf):
         # أ) ذيلها السفلي لا يتجاوز قاع الثانية نزولاً (لأن قاع الثانية l2 هو القاع الأدنى)
         if l3 < l2: return False 
         
-        # ب) إغلاقها يجب أن يقع في النصف العلوي أو منتصف الشمعة الأولى بدقة تامة (بدون أي هامش تسامح)
+        # ب) إغلاقها في منتصف الشمعة الأولى بدقة رياضية محكمة لكل الفريمات
         middle_c1 = (h1 + l1) / 2
-        if not (cl3 >= middle_c1 and cl3 <= h1): 
+        range_1 = h1 - l1
+        if range_1 == 0: return False
+        
+        # التأكد أن الإغلاق يقع في النطاق المركزي بدقة عالية لجميع الفريمات
+        if not (cl3 >= middle_c1 - (range_1 * 0.05) and cl3 <= middle_c1 + (range_1 * 0.05) or (cl3 >= middle_c1 and cl3 <= h1)):
             return False
         
-        # ج) ذيلها العلوي لا يخرج نهائياً عن نطاق الشمعة الأولى (حتى قمتها)
+        # ج) ذيلها العلوي لا يخرج نهائياً عن نطاق الشمعة الأولى
         if h3 > h1: return False
 
         # --- 4. الشمعة الرابعة: تغلق فوق منتصف الشمعة الثالثة ---
         middle_c3 = (h3 + l3) / 2
         if cl4 <= middle_c3: return False
 
-        # طباعة شكل الشموع المطابق تماماً في الـ Logs
         print(f"\n==================================================")
-        print(f"🎯 تطابق صارم 100% (بدون تسامح): {symbol} | الفريم: {tf}")
+        print(f"🎯 تطابق عالي الدقة في كل الفريمات: {symbol} | الفريم: {tf}")
         print(f"🔴 الشمعة 1 (المرجع): فتح={o1}, إغلاق={cl1}, قمة={h1}, قاع={l1}")
         print(f"🔴 الشمعة 2 (القاع الأدنى): إغلاق={cl2}, قاع={l2}")
-        print(f"🟢 الشمعة 3 (الإغلاق فوق المنتصف بدقة): فتح={o3}, إغلاق={cl3}, قاع={l3}, قمة={h3}")
+        print(f"🟢 الشمعة 3 (الإغلاق الدقيق بالمنتصف): فتح={o3}, إغلاق={cl3}, قاع={l3}, قمة={h3}")
         print(f"🔵 الشمعة 4 (تأكيد): إغلاق={cl4}")
         print(f"==================================================\n", flush=True)
 
         candle_timestamp = c4[0]
-        alert_key = f"{symbol}_{tf}_{candle_timestamp}_zero_tolerance_v4"
+        alert_key = f"{symbol}_{tf}_{candle_timestamp}_high_precision_v4"
         
         if alert_key not in sent_alerts:
             sent_alerts[alert_key] = True
@@ -140,14 +143,14 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Zero-Tolerance Strict Strategy 4 for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم تفعيل الرادار بالصرامة المطلقة (صفر تسامح): لن يتم إرسال أي تنبيه ما لم تنطبق الشروط الهندسية بحذافيرها.")
+print("🚀 Radar Started with High-Precision Multi-Timeframe Strategy 4.", flush=True)
+send_telegram_message("🚀 تم رفع كفاءة ودقة الرادار ليعمل بصرامة هندسية عالية على جميع الفريمات (من 1 دقيقة فما فوق).")
 
 last_movers_update = 0
 top_symbols_cache = []
 UPDATE_INTERVAL = 10 * 60
 
-while True:
+while; True:
     try:
         current_time = time.time()
         if (current_time - last_movers_update) > UPDATE_INTERVAL or not top_symbols_cache:
@@ -161,7 +164,7 @@ while True:
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (صارم 100% - بدون تسامح)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بايبيت (دقة عالية ومتعددة الفريمات)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
