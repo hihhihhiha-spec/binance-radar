@@ -112,7 +112,6 @@ def check_strict_strategy_4(symbol, tf):
         range_1 = h1 - l1
         if range_1 == 0: return False
         
-        # التأكد أن الإغلاق يقع في النطاق المركزي بدقة عالية لجميع الفريمات
         if not (cl3 >= middle_c1 - (range_1 * 0.05) and cl3 <= middle_c1 + (range_1 * 0.05) or (cl3 >= middle_c1 and cl3 <= h1)):
             return False
         
@@ -144,13 +143,13 @@ def check_strict_strategy_4(symbol, tf):
 
 
 print("🚀 Radar Started with High-Precision Multi-Timeframe Strategy 4.", flush=True)
-send_telegram_message("🚀 تم رفع كفاءة ودقة الرادار ليعمل بصرامة هندسية عالية على جميع الفريمات (من 1 دقيقة فما فوق).")
+send_telegram_message("🚀 تم رفع كفاءة ودقة الرادار ليعمل بصرامة هندسية عالية على جميع الفريمات.")
 
 last_movers_update = 0
 top_symbols_cache = []
 UPDATE_INTERVAL = 10 * 60
 
-while; True:
+while True:
     try:
         current_time = time.time()
         if (current_time - last_movers_update) > UPDATE_INTERVAL or not top_symbols_cache:
