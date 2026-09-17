@@ -75,7 +75,7 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- فحص الاستراتيجية بالشروط الصارمة جداً والمصححة ---
+# --- فحص الاستراتيجية بالشروط الهندسية النهائية المطابقة تماماً لقولك ---
 def check_strict_strategy_4(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -97,38 +97,41 @@ def check_strict_strategy_4(symbol, tf):
             lower_wick1 = min(o1, cl1) - l1
             if not (body1 > upper_wick1 and body1 > lower_wick1): continue
 
-            # --- 2. الشمعة الثانية: حمراء، أصغر حجماً، وتخرج تماماً من الأولى (إغلاقها تحت قاع الأولى لئلا تبقى داخلها) ---
+            # --- 2. الشمعة الثانية: حمراء، أصغر حجماً، وتخرج تماماً من الأولى من الأسفل وتعتبر هي "القاع الأدنى" ---
             if cl2 >= o2: continue
             body2 = abs(o2 - cl2)
-            # الشرط الصارم: أصغر حجماً، وقاعها وإغلاقها تحت قاع الأولى لتخرج منها تماماً ولا تكون "داخلها"
             if not (body2 < body1 and l2 < l1 and cl2 < l1): continue
 
-            # --- 3. الشمعة الثالثة: خضراء، تكسر الثانية، ذيلها السفلي لا ينزل تحت قاع الثانية، وجسمها يغلق في منتصف الأولى ---
-            if cl3 <= o3: continue
-            if l3 < l2: continue # ذيلها السفلي لا يكسر قاع الثانية
-            if not (cl3 > h2 or h3 > h2): continue # تكسر الشمعة الثانية صعوداً
+            # --- 3. الشمعة الثالثة (الخضراء): ---
+            if cl3 <= o3: continue # يجب أن تكون خضراء
             
-            # شرط الإغلاق الفعلي للجسم في منتصف الشمعة الأولى (المنتصف الحقيقي بين القمة والقاع)
+            # أ) ذيلها السفلي لا يتجاوز قاع الثانية نزولاً (لأن قاع الثانية l2 هو القاع الأدنى، وl3 تكون فوقه أو تلامسه)
+            if l3 < l2: continue 
+            
+            # ب) إغلاقها يقع في منتصف الشمعة الأولى (أو فوقه بقليل)
             middle_c1 = (h1 + l1) / 2
             range_1 = h1 - l1
-            # يجب أن يكون سعر الإغلاق واقعاً في النطاق الأوسط الحقيقي للشمعة الأولى بدقة
-            if abs(cl3 - middle_c1) > (range_1 * 0.12): continue
+            if not (cl3 >= middle_c1 - (range_1 * 0.15) and cl3 <= h1): 
+                continue
+            
+            # ج) ذيلها العلوي لا يخرج عن نطاق الشمعة الأولى
+            if h3 > h1: continue
 
             # --- 4. الشمعة الرابعة: تغلق فوق منتصف الشمعة الثالثة ---
             middle_c3 = (h3 + l3) / 2
             if cl4 <= middle_c3: continue
 
-            # طبع الشكل في الـ Logs للمتابعة الفورية
+            # طباعة شكل الشموع المطابق تماماً في الـ Logs
             print(f"\n==================================================")
-            print(f"🎯 تم رصد نموذج صحيح 100% على: {symbol} | الفريم: {tf}")
-            print(f"🔴 الشمعة 1: فتح={o1}, إغلاق={cl1}, قمة={h1}, قاع={l1}")
-            print(f"🔴 الشمعة 2: فتح={o2}, إغلاق={cl2} (خارج نطاق الأولى تماماً)")
-            print(f"🟢 الشمعة 3: فتح={o3}, إغلاق={cl3} (أغلق جسمها في منتصف الأولى بوعي)")
-            print(f"🔵 الشمعة 4: فتح={o4}, إغلاق={cl4} (أغلقت فوق منتصف الثالثة)")
+            print(f"🎯 تطابق هندسي نهائي دقيق 100% على: {symbol} | الفريم: {tf}")
+            print(f"🔴 الشمعة 1 (المرجع): فتح={o1}, إغلاق={cl1}, قمة={h1}, قاع={l1}")
+            print(f"🔴 الشمعة 2 (القاع الأدنى): إغلاق={cl2}, قاع={l2}")
+            print(f"🟢 الشمعة 3 (قاعها فوق أو مع قاع 2، وإغلاقها بمنتصف 1): فتح={o3}, إغلاق={cl3}, قاع={l3}, قمة={h3}")
+            print(f"🔵 الشمعة 4 (تأكيد): إغلاق={cl4}")
             print(f"==================================================\n", flush=True)
 
             candle_timestamp = c4[0]
-            alert_key = f"{symbol}_{tf}_{candle_timestamp}_final_v4"
+            alert_key = f"{symbol}_{tf}_{candle_timestamp}_final_geom_v4"
             
             if alert_key not in sent_alerts:
                 sent_alerts[alert_key] = True
@@ -139,8 +142,8 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Final Corrected Strategy 4 for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم تطبيق الشروط النهائية والدقيقة جداً (إخراج الثانية من الأولى وإغلاق جسم الثالثة في المنتصف تماماً).")
+print("🚀 Radar Started with Final Geometric Corrected Strategy 4 for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم اعتماد قاع الشمعة الثانية كقاع أدنى، واسترشاد إغلاق الثالثة في منتصف الشمعة الأولى.")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -160,7 +163,7 @@ while True:
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (الاستراتيجية الرابعة - النسخة النهائية المطابقة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بايبيت (النسخة الهندسية النهائية)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
