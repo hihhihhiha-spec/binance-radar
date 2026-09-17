@@ -75,75 +75,76 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- فحص الاستراتيجية بالشروط الهندسية النهائية المطابقة تماماً لقولك ---
+# --- الفحص الدقيق والمركز حصرياً على آخر 4 شموع في الشارت ---
 def check_strict_strategy_4(symbol, tf):
     try:
+        # نطلب آخر 5 شموع لضمان الحصول على الأربعة الأخيرة بوضوح تام
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
         if len(bars) < 4: 
             return False
         
-        for i in range(len(bars) - 3):
-            c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
-            
-            o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
-            o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
-            
-            # --- 1. الشمعة الأولى: حمراء ولها جسم واضح أكبر من الذيول ---
-            if cl1 >= o1: continue
-            body1 = abs(o1 - cl1)
-            upper_wick1 = h1 - max(o1, cl1)
-            lower_wick1 = min(o1, cl1) - l1
-            if not (body1 > upper_wick1 and body1 > lower_wick1): continue
+        # التركيز حصرياً ومباشرة على آخر 4 شموع فقط (الشمعة الحالية وما قبلها مباشرة)
+        c1, c2, c3, c4 = bars[-4], bars[-3], bars[-2], bars[-1]
+        
+        o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
+        o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
+        o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
+        o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
+        
+        # --- 1. الشمعة الأولى: حمراء ولها جسم واضح أكبر من الذيول ---
+        if cl1 >= o1: return False
+        body1 = abs(o1 - cl1)
+        upper_wick1 = h1 - max(o1, cl1)
+        lower_wick1 = min(o1, cl1) - l1
+        if not (body1 > upper_wick1 and body1 > lower_wick1): return False
 
-            # --- 2. الشمعة الثانية: حمراء، أصغر حجماً، وتخرج تماماً من الأولى من الأسفل وتعتبر هي "القاع الأدنى" ---
-            if cl2 >= o2: continue
-            body2 = abs(o2 - cl2)
-            if not (body2 < body1 and l2 < l1 and cl2 < l1): continue
+        # --- 2. الشمعة الثانية: حمراء، أصغر حجماً، وتخرج تماماً من الأولى من الأسفل وتعتبر هي "القاع الأدنى" ---
+        if cl2 >= o2: return False
+        body2 = abs(o2 - cl2)
+        if not (body2 < body1 and l2 < l1 and cl2 < l1): return False
 
-            # --- 3. الشمعة الثالثة (الخضراء): ---
-            if cl3 <= o3: continue # يجب أن تكون خضراء
-            
-            # أ) ذيلها السفلي لا يتجاوز قاع الثانية نزولاً (لأن قاع الثانية l2 هو القاع الأدنى، وl3 تكون فوقه أو تلامسه)
-            if l3 < l2: continue 
-            
-            # ب) إغلاقها يقع في منتصف الشمعة الأولى (أو فوقه بقليل)
-            middle_c1 = (h1 + l1) / 2
-            range_1 = h1 - l1
-            if not (cl3 >= middle_c1 - (range_1 * 0.15) and cl3 <= h1): 
-                continue
-            
-            # ج) ذيلها العلوي لا يخرج عن نطاق الشمعة الأولى
-            if h3 > h1: continue
+        # --- 3. الشمعة الثالثة (الخضراء): ---
+        if cl3 <= o3: return False # يجب أن تكون خضراء
+        
+        # أ) ذيلها السفلي لا يتجاوز قاع الثانية نزولاً (لأن قاع الثانية l2 هو القاع الأدنى)
+        if l3 < l2: return False 
+        
+        # ب) إغلاقها يقع بدقة في منتصف الشمعة الأولى
+        middle_c1 = (h1 + l1) / 2
+        range_1 = h1 - l1
+        if not (cl3 >= middle_c1 - (range_1 * 0.15) and cl3 <= h1): 
+            return False
+        
+        # ج) ذيلها العلوي لا يخرج عن نطاق الشمعة الأولى
+        if h3 > h1: return False
 
-            # --- 4. الشمعة الرابعة: تغلق فوق منتصف الشمعة الثالثة ---
-            middle_c3 = (h3 + l3) / 2
-            if cl4 <= middle_c3: continue
+        # --- 4. الشمعة الرابعة: تغلق فوق منتصف الشمعة الثالثة ---
+        middle_c3 = (h3 + l3) / 2
+        if cl4 <= middle_c3: return False
 
-            # طباعة شكل الشموع المطابق تماماً في الـ Logs
-            print(f"\n==================================================")
-            print(f"🎯 تطابق هندسي نهائي دقيق 100% على: {symbol} | الفريم: {tf}")
-            print(f"🔴 الشمعة 1 (المرجع): فتح={o1}, إغلاق={cl1}, قمة={h1}, قاع={l1}")
-            print(f"🔴 الشمعة 2 (القاع الأدنى): إغلاق={cl2}, قاع={l2}")
-            print(f"🟢 الشمعة 3 (قاعها فوق أو مع قاع 2، وإغلاقها بمنتصف 1): فتح={o3}, إغلاق={cl3}, قاع={l3}, قمة={h3}")
-            print(f"🔵 الشمعة 4 (تأكيد): إغلاق={cl4}")
-            print(f"==================================================\n", flush=True)
+        # طباعة شكل الشموع المطابق تماماً في الـ Logs للتأكد من أنها آخر 4 شموع
+        print(f"\n==================================================")
+        print(f"🎯 تطابق هندسي على آخر 4 شموع بدقة: {symbol} | الفريم: {tf}")
+        print(f"🔴 الشمعة 1 (المرجع): فتح={o1}, إغلاق={cl1}, قمة={h1}, قاع={l1}")
+        print(f"🔴 الشمعة 2 (القاع الأدنى): إغلاق={cl2}, قاع={l2}")
+        print(f"🟢 الشمعة 3 (إغلاقها بمنتصف 1): فتح={o3}, إغلاق={cl3}, قاع={l3}, قمة={h3}")
+        print(f"🔵 الشمعة 4 (تأكيد الحالية): إغلاق={cl4}")
+        print(f"==================================================\n", flush=True)
 
-            candle_timestamp = c4[0]
-            alert_key = f"{symbol}_{tf}_{candle_timestamp}_final_geom_v4"
-            
-            if alert_key not in sent_alerts:
-                sent_alerts[alert_key] = True
-                return True
+        candle_timestamp = c4[0]
+        alert_key = f"{symbol}_{tf}_{candle_timestamp}_strict_last4"
+        
+        if alert_key not in sent_alerts:
+            sent_alerts[alert_key] = True
+            return True
 
         return False
     except Exception:
         return False
 
 
-print("🚀 Radar Started with Final Geometric Corrected Strategy 4 for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم اعتماد قاع الشمعة الثانية كقاع أدنى، واسترشاد إغلاق الثالثة في منتصف الشمعة الأولى.")
+print("🚀 Radar Started focusing strictly on the last 4 candles for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم تحديث الرادار ليركز حصرياً وبدقة صارمة على آخر 4 شموع فقط في كل فريم.")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -163,7 +164,7 @@ while True:
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (النسخة الهندسية النهائية)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بايبيت (التركيز التام على آخر 4 شموع)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
