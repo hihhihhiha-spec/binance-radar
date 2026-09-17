@@ -75,7 +75,7 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- الاستراتيجية الرابعة الدقيقة والصارمة ---
+# --- الاستراتيجية الرابعة الدقيقة (بعد معالجة كل ملاحظاتك) ---
 def check_strict_strategy_4(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -85,7 +85,7 @@ def check_strict_strategy_4(symbol, tf):
         for i in range(len(bars) - 3):
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            # الشمعة الأولى: حمراء (الجسم أكبر من الذيول)
+            # 1. الشمعة الأولى: حمراء، حجم جسمها أكبر من مجموع ذيولها
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
             is_red_1 = cl1 < o1
             body1 = abs(o1 - cl1)
@@ -93,24 +93,30 @@ def check_strict_strategy_4(symbol, tf):
             lower_wick1 = min(o1, cl1) - l1
             is_body_strict_1 = is_red_1 and (body1 > upper_wick1) and (body1 > lower_wick1)
             
-            # الشمعة الثانية: حمراء، أصغر حجماً من الأولى، وتكسر الأولى (قاعها أدنى من قاع الأولى)
+            # 2. الشمعة الثانية: حمراء، أصغر حجماً من الأولى، وتكسر قاع الأولى
             o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
             is_red_2 = cl2 < o2
             body2 = abs(o2 - cl2)
             is_smaller_red_2 = is_red_2 and (body2 < body1) and (l2 < l1)
             
-            # الشمعة الثالثة: خضراء، ذيلها السفلي لا يكسر تحت الثانية (قاع الثالثة >= قاع الثانية)، تكسر الثانية صعوداً، وتغلق في منتصف الأولى
+            # 3. الشمعة الثالثة: خضراء
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             is_green_3 = cl3 > o3
-            is_wick_safe_3 = l3 >= l2  # ذيلها السفلي لا يكسر تحت الشمعة الثانية
-            is_break_3 = cl3 > h2      # تكسر الشمعة الثانية صعوداً
             
-            middle_c1 = (o1 + cl1) / 2
-            is_close_in_middle_1 = abs(cl3 - middle_c1) <= (body1 * 0.25) # إغلاق في منتصف الأولى
+            # - شرط عدم كسر الذيل السفلي للشمعة الثالثة تحت قاع الشمعة الثانية نهائياً
+            is_wick_safe_3 = l3 >= l2  
             
-            # الشمعة الرابعة: تغلق فوق نصف الشمعة الخضراء الثالثة
+            # - شرط أن تكسر الشمعة الثالثة الشمعة الثانية صعوداً (القمة أو الإغلاق أعلى من قمة الثانية)
+            is_break_3 = (cl3 > h2) or (h3 > h2)
+            
+            # - شرط الإغلاق في منتصف الشمعة الأولى بناءً على المدى الكامل (القمة والقاع للشمعة الأولى)
+            middle_c1 = (h1 + l1) / 2
+            # السماح بنطاق منطقي جداً حول المنتصف لتجنب تفويت الفرص بسبب أجزاء من العشرات
+            is_close_in_middle_1 = abs(cl3 - middle_c1) <= ((h1 - l1) * 0.2)
+            
+            # 4. الشمعة الرابعة: يجب أن تكون قد أغلقت بالكامل فوق نصف الشمعة الثالثة
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
-            middle_c3 = (o3 + cl3) / 2
+            middle_c3 = (h3 + l3) / 2 # منتصف الشمعة الثالثة (مدى كامل أو جسم حسب الرغبة، هنا المدى الكامل أدق)
             is_close_above_middle_3 = cl4 > middle_c3
 
             if (is_body_strict_1 and 
@@ -119,7 +125,7 @@ def check_strict_strategy_4(symbol, tf):
                 is_close_above_middle_3):
                 
                 candle_timestamp = c4[0]
-                alert_key = f"{symbol}_{tf}_{candle_timestamp}_strict_s4"
+                alert_key = f"{symbol}_{tf}_{candle_timestamp}_perfect_s4"
                 
                 if alert_key not in sent_alerts:
                     sent_alerts[alert_key] = True
@@ -130,8 +136,8 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Correct Strategy 4 for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم تصحيح شروط الاستراتيجية الرابعة بدقة تامة والعمل بها فقط.")
+print("🚀 Radar Started with Perfect Strategy 4 for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم تحديث الرادار بالنسخة النهائية والدقيقة للاستراتيجية الرابعة بناءً على ملاحظاتك.")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -156,7 +162,7 @@ while True:
                 print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
                 
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (الاستراتيجية الرابعة المصححة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بايبيت (الاستراتيجية الرابعة - النسخة المثالية)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
