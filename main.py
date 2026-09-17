@@ -75,7 +75,7 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- فحص الاستراتيجية بترتيبها الصحيح (من اليسار لليمين: 1 ثم 2 ثم 3 ثم 4) ---
+# --- فحص الاستراتيجية مع طباعة شكل الشموع في الـ Logs للمتابعة ---
 def check_strict_strategy_4(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -83,7 +83,6 @@ def check_strict_strategy_4(symbol, tf):
             return False
         
         for i in range(len(bars) - 3):
-            # الترتيب من اليسار لليمين (الأقدم إلى الأحدث)
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
@@ -91,55 +90,48 @@ def check_strict_strategy_4(symbol, tf):
             o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
             o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
             
-            # --- 1. الشمعة الأولى (اليسار): يجب أن تكون حمراء ---
-            if cl1 >= o1: 
-                continue
+            # --- 1. الشمعة الأولى (اليسار): حمراء ---
+            is_red_1 = cl1 < o1
+            if not is_red_1: continue
             
             body1 = abs(o1 - cl1)
             upper_wick1 = h1 - max(o1, cl1)
             lower_wick1 = min(o1, cl1) - l1
-            # جسمها أكبر من الذيول
-            if not (body1 > upper_wick1 and body1 > lower_wick1):
-                continue
+            if not (body1 > upper_wick1 and body1 > lower_wick1): continue
 
-            # --- 2. الشمعة الثانية: يجب أن تكون حمراء، أصغر حجماً، وتكسر الأولى من الأسفل وتغلق تحت إغلاق الأولى ---
-            if cl2 >= o2: 
-                continue
+            # --- 2. الشمعة الثانية: حمراء، أصغر، تكسر الأولى وتغلق تحت إغلاقها ---
+            is_red_2 = cl2 < o2
+            if not is_red_2: continue
             
             body2 = abs(o2 - cl2)
-            # الشروط الصارمة للثانية:
-            # - حجمها أصغر من الأولى
-            # - قاعها أدنى من قاع الأولى (l2 < l1)
-            # - إغلاقها أدنى من إغلاق الأولى (cl2 < cl1)
-            if not (body2 < body1 and l2 < l1 and cl2 < cl1):
-                continue
+            if not (body2 < body1 and l2 < l1 and cl2 < cl1): continue
 
-            # --- 3. الشمعة الثالثة: يجب أن تكون خضراء ---
-            if cl3 <= o3: 
-                continue
+            # --- 3. الشمعة الثالثة: خضراء، ذيلها السفلي لا يكسر الثانية، تكسر الثانية، وتغلق في منتصف الأولى ---
+            is_green_3 = cl3 > o3
+            if not is_green_3: continue
             
-            # - ذيلها السفلي لا يكسر قاع الشمعة الثانية نهائياً (l3 >= l2)
-            if l3 < l2:
-                continue
+            if l3 < l2: continue # ذيلها السفلي كسر الثانية
+            if not (cl3 > h2 or h3 > h2): continue # لم تكسر الثانية صعوداً
             
-            # - تكسر الشمعة الثانية صعوداً (قمة أو إغلاق الثالثة أعلى من قمة الثانية)
-            if not (cl3 > h2 or h3 > h2):
-                continue
-            
-            # - إغلاقها في منتصف الشمعة الأولى بدقة (بناءً على المدى الكامل للولى)
             middle_c1 = (h1 + l1) / 2
             range_1 = h1 - l1
-            if abs(cl3 - middle_c1) > (range_1 * 0.15):
-                continue
+            if abs(cl3 - middle_c1) > (range_1 * 0.15): continue # لم تغلق في منتصف الأولى
 
-            # --- 4. الشمعة الرابعة (اليمين/الحالية): يجب أن تغلق فوق منتصف الشمعة الثالثة ---
+            # --- 4. الشمعة الرابعة (اليمين): تغلق فوق منتصف الشمعة الثالثة ---
             middle_c3 = (h3 + l3) / 2
-            if cl4 <= middle_c3:
-                continue
+            if cl4 <= middle_c3: continue
 
-            # إذا انطبقت كل الشروط بحذافيرها وبنفس ترتيبك (من اليسار لليمين):
+            # 🔍 [إذا وصلنا إلى هنا، فهذا يعني أن النموذج تطابق تماماً! سنطبع شكله في الـ Logs لتراه]
+            print(f"\n==================================================")
+            print(f"🎯 تم رصد نموذج مطابق على: {symbol} | الفريم: {tf}")
+            print(f"🔴 الشمعة 1 (اليسار): فتح={o1}, إغلاق={cl1}, قمة={h1}, قاع={l1} (حمراء)")
+            print(f"🔴 الشمعة 2 (الثانية):  فتح={o2}, إغلاق={cl2}, قمة={h2}, قاع={l2} (حمراء وتكسر الأولى)")
+            print(f"🟢 الشمعة 3 (الثالثة):  فتح={o3}, إغلاق={cl3}, قمة={h3}, قاع={l3} (خضراء وتغلق بمنتصف 1)")
+            print(f"🔵 الشمعة 4 (الرابعة):  فتح={o4}, إغلاق={cl4}, قمة={h4}, قاع={l4} (تغلق فوق منتصف 3)")
+            print(f"==================================================\n", flush=True)
+
             candle_timestamp = c4[0]
-            alert_key = f"{symbol}_{tf}_{candle_timestamp}_left_to_right_s4"
+            alert_key = f"{symbol}_{tf}_{candle_timestamp}_debug_s4"
             
             if alert_key not in sent_alerts:
                 sent_alerts[alert_key] = True
@@ -150,12 +142,12 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Left-to-Right Strategy 4 for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم ضبط الرادار بالترتيب الصحيح (من اليسار لليمين: الأولى ثم الثانية ثم الثالثة والرابعة).")
+print("🚀 Radar Started with Candle Visualizer Debugger for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم تفعيل رادار تتبع شكل الشموع (Debug Mode) لمعرفة تفاصيل ما يقرأه الكود.")
 
 last_movers_update = 0
 top_symbols_cache = []
-UPDATE_INTERVAL = 10 * 60  # تحديث القائمة كل 10 دقائق
+UPDATE_INTERVAL = 10 * 60
 
 while True:
     try:
@@ -165,23 +157,17 @@ while True:
             last_movers_update = current_time
 
         if not top_symbols_cache:
-            print("⏳ القائمة فارغة حالياً، إعادة المحاولة بعد 15 ثانية...", flush=True)
             time.sleep(15)
             continue
 
-        print(f"📋 بدء فحص {len(top_symbols_cache)} عملة من فيوتشرز بايبيت...", flush=True)
-
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
-                print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
-                
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (الاستراتيجية الرابعة - الترتيب الصحيح)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه تطابق الشكل (الاستراتيجية الرابعة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
         
-        print("--- اكتملت دورة الفحص. انتظار قليل ---", flush=True)
         time.sleep(10)
 
     except Exception as e:
