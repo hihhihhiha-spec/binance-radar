@@ -75,7 +75,7 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- الفحص الهندسي الصارم 100% (صفر تسامح) في كل الفريمات ---
+# --- الفحص الهندسي المحصن بصرامة مطلقة (صفر تسامح حقيقي) ---
 def check_strict_strategy_4(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -107,12 +107,16 @@ def check_strict_strategy_4(symbol, tf):
         # أ) ذيلها السفلي لا يتجاوز قاع الثانية نزولاً (لأن قاع الثانية l2 هو القاع الأدنى)
         if l3 < l2: return False 
         
-        # ب) إغلاقها في منتصف الشمعة الأولى بدقة تامة (صفر تسامح: من المنتصف إلى القمة تماماً)
+        # ب) خط أحمر صارم: حساب منتصف الشمعة الأولى بدقة، ومنع أي إغلاق تحته نهائياً
         middle_c1 = (h1 + l1) / 2
-        if not (cl3 >= middle_c1 and cl3 <= h1):
+        if cl3 < middle_c1: 
+            return False
+            
+        # ج) إغلاقها يجب ألا يتجاوز قمة الشمعة الأولى
+        if cl3 > h1:
             return False
         
-        # ج) ذيلها العلوي لا يخرج نهائياً عن نطاق الشمعة الأولى
+        # د) ذيلها العلوي لا يخرج نهائياً عن نطاق الشمعة الأولى
         if h3 > h1: return False
 
         # --- 4. الشمعة الرابعة: تغلق فوق منتصف الشمعة الثالثة ---
@@ -120,15 +124,15 @@ def check_strict_strategy_4(symbol, tf):
         if cl4 <= middle_c3: return False
 
         print(f"\n==================================================")
-        print(f"🎯 تطابق صارم 100% (صفر تسامح) على كل الفريمات: {symbol} | الفريم: {tf}")
-        print(f"🔴 الشمعة 1 (المرجع): فتح={o1}, إغلاق={cl1}, قمة={h1}, قاع={l1}")
-        print(f"🔴 الشمعة 2 (القاع الأدنى): إغلاق={cl2}, قاع={l2}")
-        print(f"🟢 الشمعة 3 (الإغلاق فوق المنتصف حصرياً): فتح={o3}, إغلاق={cl3}, قاع={l3}, قمّة={h3}")
+        print(f"🎯 تطابق محصن 100% (إغلاق فوق النصف حصرياً): {symbol} | الفريم: {tf}")
+        print(f"🔴 الشمعة 1 (المرجع): منتصفها={middle_c1}, إغلاق 1={cl1}")
+        print(f"🔴 الشمعة 2 (القاع الأدنى): قاع={l2}")
+        print(f"🟢 الشمعة 3 (إغلاقها فوق المنتصف بدقة): إغلاق 3={cl3}")
         print(f"🔵 الشمعة 4 (تأكيد): إغلاق={cl4}")
         print(f"==================================================\n", flush=True)
 
         candle_timestamp = c4[0]
-        alert_key = f"{symbol}_{tf}_{candle_timestamp}_zero_tolerance_strict_v4"
+        alert_key = f"{symbol}_{tf}_{candle_timestamp}_fortified_v4"
         
         if alert_key not in sent_alerts:
             sent_alerts[alert_key] = True
@@ -139,8 +143,8 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Zero-Tolerance Strict Strategy 4.", flush=True)
-send_telegram_message("🚀 تم ضبط الرادار بصفر تسامح تام مع الحفاظ على جميع الفريمات وشروط الهندسة بدقة مطلقة.")
+print("🚀 Radar Started with Fortified Zero-Tolerance Strategy 4.", flush=True)
+send_telegram_message("🚀 تم تحصين الرادار برمجياً: أي إغلاق تحت منتصف الشمعة الأولى سيتم رفضه فوراً ولن يرسل أي تنبيه.")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -160,7 +164,7 @@ while True:
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (صارم 100% - صفر تسامح)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بايبيت (محصن ضد الإغلاق تحت النصف)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
