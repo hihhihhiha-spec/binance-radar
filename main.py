@@ -75,7 +75,7 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- الاستراتيجية الرابعة (النسخة النهائية المصححة بدقة تامة وبدون أي أخطاء) ---
+# --- فحص الاستراتيجية بترتيبها الصحيح (من اليسار لليمين: 1 ثم 2 ثم 3 ثم 4) ---
 def check_strict_strategy_4(symbol, tf):
     try:
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=5)
@@ -83,62 +83,63 @@ def check_strict_strategy_4(symbol, tf):
             return False
         
         for i in range(len(bars) - 3):
+            # الترتيب من اليسار لليمين (الأقدم إلى الأحدث)
             c1, c2, c3, c4 = bars[i], bars[i+1], bars[i+2], bars[i+3]
             
-            # --- الشمعة الأولى: يجب أن تكون حمراء وصارمة ---
             o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
-            is_red_1 = cl1 < o1
-            if not is_red_1: 
-                continue # إذا لم تكن حمراء، الغِ الفحص فوراً
+            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
+            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
+            o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
+            
+            # --- 1. الشمعة الأولى (اليسار): يجب أن تكون حمراء ---
+            if cl1 >= o1: 
+                continue
             
             body1 = abs(o1 - cl1)
             upper_wick1 = h1 - max(o1, cl1)
             lower_wick1 = min(o1, cl1) - l1
+            # جسمها أكبر من الذيول
             if not (body1 > upper_wick1 and body1 > lower_wick1):
                 continue
 
-            # --- الشمعة الثانية: حمراء، أصغر، تكسر الأولى وتغلق أسفل إغلاقها ---
-            o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
-            is_red_2 = cl2 < o2
-            if not is_red_2: 
-                continue # يجب أن تكون حمراء
+            # --- 2. الشمعة الثانية: يجب أن تكون حمراء، أصغر حجماً، وتكسر الأولى من الأسفل وتغلق تحت إغلاق الأولى ---
+            if cl2 >= o2: 
+                continue
             
             body2 = abs(o2 - cl2)
-            # شرط الكسر الصارم: قاع الثانية تحت قاع الأولى وإغلاق الثانية تحت إغلاق الأولى وحجمها أصغر
-            is_strict_break_2 = (body2 < body1) and (l2 < l1) and (cl2 < cl1)
-            if not is_strict_break_2:
+            # الشروط الصارمة للثانية:
+            # - حجمها أصغر من الأولى
+            # - قاعها أدنى من قاع الأولى (l2 < l1)
+            # - إغلاقها أدنى من إغلاق الأولى (cl2 < cl1)
+            if not (body2 < body1 and l2 < l1 and cl2 < cl1):
                 continue
 
-            # --- الشمعة الثالثة: خضراء، ذيلها السفلي لا يكسر الثانية، تكسر الثانية، وتغلق في منتصف الأولى ---
-            o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
-            is_green_3 = cl3 > o3
-            if not is_green_3: 
-                continue # يجب أن تكون خضراء
+            # --- 3. الشمعة الثالثة: يجب أن تكون خضراء ---
+            if cl3 <= o3: 
+                continue
             
-            # ذيلها السفلي لا يكسر قاع الثانية
+            # - ذيلها السفلي لا يكسر قاع الشمعة الثانية نهائياً (l3 >= l2)
             if l3 < l2:
                 continue
             
-            # تكسر الشمعة الثانية صعوداً (قمة أو إغلاق الثالثة أعلى من قمة الثانية)
+            # - تكسر الشمعة الثانية صعوداً (قمة أو إغلاق الثالثة أعلى من قمة الثانية)
             if not (cl3 > h2 or h3 > h2):
                 continue
             
-            # الإغلاق في منتصف الشمعة الأولى بدقة (بناءً على المدى الكامل للولى)
+            # - إغلاقها في منتصف الشمعة الأولى بدقة (بناءً على المدى الكامل للولى)
             middle_c1 = (h1 + l1) / 2
             range_1 = h1 - l1
-            # سماحة ضيقة جداً (15% من مدى الشمعة) لضمان الدقة
             if abs(cl3 - middle_c1) > (range_1 * 0.15):
                 continue
 
-            # --- الشمعة الرابعة: تغلق فوق منتصف الشمعة الثالثة ---
-            o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
+            # --- 4. الشمعة الرابعة (اليمين/الحالية): يجب أن تغلق فوق منتصف الشمعة الثالثة ---
             middle_c3 = (h3 + l3) / 2
             if cl4 <= middle_c3:
                 continue
 
-            # إذا كل الشروط انطبقت بنجاح تام:
+            # إذا انطبقت كل الشروط بحذافيرها وبنفس ترتيبك (من اليسار لليمين):
             candle_timestamp = c4[0]
-            alert_key = f"{symbol}_{tf}_{candle_timestamp}_pure_fix_s4"
+            alert_key = f"{symbol}_{tf}_{candle_timestamp}_left_to_right_s4"
             
             if alert_key not in sent_alerts:
                 sent_alerts[alert_key] = True
@@ -149,8 +150,8 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Radar Started with Pure Fixed Strategy 4 for Bybit Futures.", flush=True)
-send_telegram_message("🚀 تم رفع النسخة المنقحة والصارمة جداً للاستراتيجية الرابعة (تم القضاء على كافة الأخطاء السابقة).")
+print("🚀 Radar Started with Left-to-Right Strategy 4 for Bybit Futures.", flush=True)
+send_telegram_message("🚀 تم ضبط الرادار بالترتيب الصحيح (من اليسار لليمين: الأولى ثم الثانية ثم الثالثة والرابعة).")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -175,7 +176,7 @@ while True:
                 print(f"🔍 [فحص] ({index}/{len(top_symbols_cache)}) العملة: {symbol} | الفريم: {tf}", flush=True)
                 
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (الاستراتيجية الرابعة - النسخة النقية والصارمة)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بايبيت (الاستراتيجية الرابعة - الترتيب الصحيح)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
