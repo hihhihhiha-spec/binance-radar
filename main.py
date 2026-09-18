@@ -75,37 +75,37 @@ def get_top_futures_gainers(limit=150):
         print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
         return []
 
-# --- الفحص الهندسي مع شرط الترند النازل (الشمعة الثانية هي القاع الأدنى) ---
+# --- الفحص الهندسي المطور: موجة هابطة حقيقية + شروط الذيول والصارم 100% ---
 def check_strict_strategy_4(symbol, tf):
     try:
-        # نطلب 10 شموع لضمان القدرة على التحقق من الترند الهابط السابق للنموذج بدقة
+        # نطلب 10 شموع للتحقق بدقة من الموجة الهابطة (الترند الهابط)
         bars = exchange.fetch_ohlcv(symbol, timeframe=tf, limit=10)
-        if len(bars) < 6: 
+        if len(bars) < 7: 
             return False
         
-        c1, c2, c3, c4 = bars[-4], bars[-3], bars[-2], bars[-1]
+        c_prev2, c_prev1, c1, c2, c3, c4 = bars[-6], bars[-5], bars[-4], bars[-3], bars[-2], bars[-1]
         
         o1, h1, l1, cl1 = c1[1], c1[2], c1[3], c1[4]
         o2, h2, l2, cl2 = c2[1], c2[2], c2[3], c2[4]
         o3, h3, l3, cl3 = c3[1], c3[2], c3[3], c3[4]
         o4, h4, l4, cl4 = c4[1], c4[2], c4[3], c4[4]
         
-        # --- 0. شرط الترند النازل العام (تأكيد أن النموذج يأتي بعد هبوط وأن الشمعة الثانية هي القاع الأعمق) ---
-        # نتاكد أن الشمعة السابقة لـ C1 كانت في مسار هابط أو أن القمم تتناقص تدريجياً لضمان أننا في ترند نازل
-        prev_bar = bars[-5]
-        if prev_bar[4] < c1[4] and c1[4] < c2[4]: 
-            # إذا كانت الأسعار ترتفع قبل C1 فهذا ليس ترند نازل
-            pass # نترك التحقق الأساسي يحكم، أو نضع شرط الترند بدقة أدناه:
+        # --- 0. شرط الترند الهابط (موجة هابطة حقيقية قبل النموذج) ---
+        # نتأكد أن القمم تتناقص تدريجياً (موجة هابطة متصلة قبل الشمعة الأولى)
+        if not (c_prev2[2] >= c_prev1[2] and c_prev1[2] >= h1):
+            return False
 
-        # التحقق الأساسي للترند النازل: الشمعة الثانية تمثل القاع الأدنى مقارنة بما حولها
-        # --- 1. الشمعة الأولى: حمراء ولها جسم واضح أكبر من الذيول ---
-        if cl1 >= o1: return False
+        # --- 1. الشمعة الأولى: حمراء، جسمها واضح أكبر من الذيول، وذيلها العلوي ليس أكبر من ذيلها السفلي ---
+        if cl1 >= o1: return False # يجب أن تكون حمراء
         body1 = abs(o1 - cl1)
         upper_wick1 = h1 - max(o1, cl1)
         lower_wick1 = min(o1, cl1) - l1
+        
+        # الجسم أكبر من الذيول، والذيل العلوي غير أكبر من الذيل السفلي (أي الذيل السفلي أكبر أو مساوي للعلوي)
         if not (body1 > upper_wick1 and body1 > lower_wick1): return False
+        if upper_wick1 > lower_wick1: return False
 
-        # --- 2. الشمعة الثانية: حمراء، أصغر حجماً، وتخرج تماماً من الأولى من الأسفل وقاعها هو القاع الأدنى المطلق ---
+        # --- 2. الشمعة الثانية: حمراء، أصغر حجماً، وتخرج تماماً من الأولى من الأسفل وقاعها هو القاع الأدنى المطلق للموجة ---
         if cl2 >= o2: return False
         body2 = abs(o2 - cl2)
         if not (body2 < body1 and l2 < l1 and cl2 < l1): return False
@@ -113,7 +113,7 @@ def check_strict_strategy_4(symbol, tf):
         # --- 3. الشمعة الثالثة (الخضراء): ---
         if cl3 <= o3: return False # يجب أن تكون خضراء
         
-        # أ) ذيلها السفلي لا يتجاوز قاع الثانية نزولاً (لأن قاع الثانية l2 هو القاع الأدنى للترند الهابط)
+        # أ) ذيلها السفلي لا يتجاوز قاع الثانية نزولاً (لان قاع الثانية l2 هو القاع الأدنى للموجة)
         if l3 < l2: return False 
         
         # ب) خط أحمر صارم: إغلاق الشمعة الثالثة فوق منتصف الشمعة الأولى حصرياً (صفر تسامح)
@@ -133,15 +133,15 @@ def check_strict_strategy_4(symbol, tf):
         if cl4 <= middle_c3: return False
 
         print(f"\n==================================================")
-        print(f"🎯 تطابق ترند نازل (صفر تسامح): {symbol} | الفريم: {tf}")
-        print(f"🔴 الشمعة 1 (المرجع): منتصفها={middle_c1}")
-        print(f"🔴 الشمعة 2 (القاع الأدنى للترند): قاع={l2}")
+        print(f"🎯 تطابق موجة هابطة وشروط دقيقة: {symbol} | الفريم: {tf}")
+        print(f"🔴 الشمعة 1: ذيل سفلي={lower_wick1} >= ذيل علوي={upper_wick1}, منتصفها={middle_c1}")
+        print(f"🔴 الشمعة 2 (القاع الأدنى للموجة): قاع={l2}")
         print(f"🟢 الشمعة 3 (إغلاق فوق المنتصف): إغلاق 3={cl3}")
         print(f"🔵 الشمعة 4 (تأكيد): إغلاق={cl4}")
         print(f"==================================================\n", flush=True)
 
         candle_timestamp = c4[0]
-        alert_key = f"{symbol}_{tf}_{candle_timestamp}_downtrend_v4"
+        alert_key = f"{symbol}_{tf}_{candle_timestamp}_downtrend_wave_v4"
         
         if alert_key not in sent_alerts:
             sent_alerts[alert_key] = True
@@ -152,8 +152,8 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Downtrend Radar Started with Zero-Tolerance Strategy 4.", flush=True)
-send_telegram_message("🚀 تم تفعيل رادار الترند النازل (الشمعة الثانية قاع أدنى + صرامة كاملة بدون تسامح).")
+print("🚀 Downtrend Wave Radar Started with Strict Rules.", flush=True)
+send_telegram_message("🚀 تم تفعيل رادار الموجة الهابطة وتصفية الذيول العلوية بنجاح.")
 
 last_movers_update = 0
 top_symbols_cache = []
@@ -173,7 +173,7 @@ while True:
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (ترند نازل - قاع الشمعة الثانية)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بايبيت (موجة هابطة + قاع الشمعة 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
                 time.sleep(0.4)
