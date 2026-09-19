@@ -58,21 +58,17 @@ def get_top_binance_symbols(limit=100):
         
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
-        
-        # طباعة بعض العملات التي يتم مراقبتها لتتأكد منها بعينك
-        print(f"🔥 تم اختيار أعلى {len(top_symbols)} عملة. عينة من العملات قيد المراقبة: {top_symbols[:10]}...", flush=True)
+        print(f"🔥 تم اختيار أعلى {len(top_symbols)} عملة. العينة: {top_symbols[:10]}...", flush=True)
         return top_symbols
     except Exception as e:
         print(f"❌ خطأ في جلب العملات: {e}", flush=True)
         return []
 
-# --- التحقق الهندسي الصارم مع طباعة تفصيلية عند الفحص ---
+# --- التحقق الهندسي الصارم ---
 def evaluate_strategy(symbol, tf, candles):
     try:
         if len(candles) < 7:
             return
-        
-        print(f"🔍 [فحص إغلاق شمعة] العملة: {symbol.upper()} | الفريم: {tf} | عدد الشموع: {len(candles)}", flush=True)
         
         c_prev2, c_prev1, c1, c2, c3, c4 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2], candles[-1]
         
@@ -81,11 +77,11 @@ def evaluate_strategy(symbol, tf, candles):
         o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
         o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
         
-        # 0. شرط الترند الهابط (موجة هابطة حقيقية قبل النموذج)
+        # 0. شرط الترند الهابط
         if not (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
             return
 
-        # 1. الشمعة الأولى: حمراء، جسمها واضح أكبر من الذيول، وذيلها العلوي ليس أكبر من ذيلها السفلي
+        # 1. الشمعة الأولى
         if cl1 >= o1: return
         body1 = abs(o1 - cl1)
         upper_wick1 = h1 - max(o1, cl1)
@@ -93,22 +89,21 @@ def evaluate_strategy(symbol, tf, candles):
         if not (body1 > upper_wick1 and body1 > lower_wick1): return
         if upper_wick1 > lower_wick1: return
 
-        # 2. الشمعة الثانية: حمراء، أصغر حجماً، وتخرج تماماً من الأولى من الأسفل وقاعها هو القاع الأدنى المطلق للموجة
+        # 2. الشمعة الثانية
         if cl2 >= o2: return
         body2 = abs(o2 - cl2)
         if not (body2 < body1 and l2 < l1 and cl2 < l1): return
 
-        # 3. الشمعة الثالثة (الخضراء):
+        # 3. الشمعة الثالثة
         if cl3 <= o3: return
         if l3 < l2: return 
         
-        # خط أحمر صارم: إغلاق الشمعة الثالثة فوق منتصف الشمعة الأولى حصرياً
         middle_c1 = (h1 + l1) / 2
         if cl3 < middle_c1: return
         if cl3 > h1: return
         if h3 > h1: return
 
-        # 4. الشمعة الرابعة: تغلق فوق منتصف الشمعة الثالثة
+        # 4. الشمعة الرابعة
         middle_c3 = (h3 + l3) / 2
         if cl4 <= middle_c3: return
 
@@ -120,9 +115,9 @@ def evaluate_strategy(symbol, tf, candles):
             print(f"🎯 🚀 تم اكتشاف النموذج وإرسال تنبيه مطابقة: {symbol.upper()} على فريم {tf}", flush=True)
 
     except Exception as e:
-        print(f"⚠️ خطأ أثناء الفحص لـ {symbol}: {e}", flush=True)
+        pass
 
-# --- استقبال بيانات الـ WebSocket الحية ---
+# --- استقبال بيانات الـ WebSocket الحية مع طباعة كل عملة يتم فحصها وتحديثها ---
 def on_message(ws, message):
     try:
         data = json.loads(message)
@@ -151,8 +146,12 @@ def on_message(ws, message):
                 if len(market_data[key]) > 20:
                     market_data[key].pop(0)
             
-            # إذا أغلقت الشمعة، نقوم بتنفيذ استراتيجية الفحص الهندسي الصارم وطباعة اسم العملة
+            # 🔍 طباعة مباشرة لكل عملة يصلها تحديث من السوق لترى أنها تعمل وتفحص أمام عينك
+            print(f"👁️ [فحص حركة] العملة: {symbol.upper()} | الفريم: {tf} | السعر الحالي: {candle['c']}", flush=True)
+            
+            # الفحص الصارم عند إغلاق الشمعة
             if is_closed:
+                print(f"🔒 [إغلاق شمعة] تم إغلاق شمعة لـ {symbol.upper()} على فريم {tf} - جاري تطبيق شروط النموذج...", flush=True)
                 evaluate_strategy(symbol, tf, market_data[key])
     except Exception as e:
         pass
@@ -166,8 +165,7 @@ def on_close(ws, close_status_code, close_msg):
     start_websocket_radar()
 
 def on_open(ws):
-    print("✅ Connected to Binance WebSocket Stream successfully! Monitoring live candle closes...", flush=True)
-    send_telegram_message("🚀 تم تفعيل الرادار بنجاح، وهو يراقب العملات الآن لحظياً.")
+    print("✅ Connected to WebSocket! Live market data flowing and monitoring...", flush=True)
 
 def start_websocket_radar():
     symbols = get_top_binance_symbols(limit=100)
@@ -183,7 +181,7 @@ def start_websocket_radar():
         for tf in timeframes:
             streams.append(f"{s}@kline_{tf}")
     
-    print(f"🔄 جاري فتح اشتراكات الـ WebSocket لـ {len(symbols)} عملة عبر {len(timeframes)} فريمات...", flush=True)
+    print(f"🔄 جاري فتح اشتراكات الـ WebSocket لـ {len(symbols)} عملة...", flush=True)
     
     stream_url = f"wss://fstream.binance.com/stream?streams={'/'.join(streams)}"
     
