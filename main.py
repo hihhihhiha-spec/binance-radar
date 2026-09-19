@@ -47,13 +47,18 @@ threading.Thread(target=run_http_server, daemon=True).start()
 
 sent_alerts = {}
 
-# --- جلب أعلى 200 عملة ---
+# هيدر وهمي لتجنب حظر 418 من بينانس
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+# --- جلب أعلى 200 عملة مع Headers لتجنب الحظر ---
 def get_top_futures_symbols(limit=200):
     try:
         print("📡 [بينانس] جاري جلب وتحديث قائمة أعلى العملات صعوداً...", flush=True)
         sys.stdout.flush()
         url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=10)
         
         if response.status_code != 200:
             print(f"⚠️ خطأ في الاستجابة (الكود: {response.status_code})", flush=True)
@@ -100,7 +105,7 @@ def get_top_futures_symbols(limit=200):
 def get_klines(symbol, interval, limit=15):
     try:
         url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={interval}&limit={limit}"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, headers=HEADERS, timeout=5)
         if response.status_code == 200:
             raw_data = response.json()
             if isinstance(raw_data, list):
@@ -209,7 +214,7 @@ def main_loop():
                 time.sleep(60)
                 continue
 
-        print(f"\n🔄 [دور Fحص جديدة] فحص {len(symbols)} عملة عبر {len(timeframes)} فريمات...", flush=True)
+        print(f"\n🔄 [دورة فحص جديدة] فحص {len(symbols)} عملة عبر {len(timeframes)} فريمات...", flush=True)
         sys.stdout.flush()
         
         for symbol in symbols:
@@ -218,7 +223,7 @@ def main_loop():
                 if candles:
                     evaluate_strategies(symbol, tf, candles)
                 
-                time.sleep(0.15)
+                time.sleep(0.2) # زيادة طفيفة في الفاصل الزمني لتجنب الحظر
                 
         print("⏳ [استراحة] انتهاء الدورة الحالية، الانتقال للدورة التالية...", flush=True)
         sys.stdout.flush()
