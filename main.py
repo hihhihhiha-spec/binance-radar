@@ -47,17 +47,19 @@ threading.Thread(target=run_http_server, daemon=True).start()
 
 sent_alerts = {}
 
-# هيدر وهمي لتجنب حظر 418 من بينانس
+# هيدر متصفح حقيقي لتجنب أي حظر
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "application/json"
 }
 
-# --- جلب أعلى 200 عملة مع Headers لتجنب الحظر ---
+# --- جلب أعلى العملات من واجهة Spot الآمنة ضد الحظر ---
 def get_top_futures_symbols(limit=200):
     try:
-        print("📡 [بينانس] جاري جلب وتحديث قائمة أعلى العملات صعوداً...", flush=True)
+        print("📡 [بينانس] جاري جلب قائمة العملات الصاعدة من خادم السبوت البديل...", flush=True)
         sys.stdout.flush()
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        # استخدام واجهة Spot العامة لتجنب حظر IP على الفيوتشرز
+        url = "https://api.binance.com/api/v3/ticker/24hr"
         response = requests.get(url, headers=HEADERS, timeout=10)
         
         if response.status_code != 200:
@@ -93,7 +95,7 @@ def get_top_futures_symbols(limit=200):
             if len(top_symbols) >= limit:
                 break
                 
-        print(f"🔥 [نجاح] تم اختيار أعلى {len(top_symbols)} عملة صعوداً.", flush=True)
+        print(f"🔥 [نجاح] تم اختيار أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
         sys.stdout.flush()
         return top_symbols
     except Exception as e:
@@ -101,7 +103,7 @@ def get_top_futures_symbols(limit=200):
         sys.stdout.flush()
         return []
 
-# --- جلب الشموع ---
+# --- جلب الشموع (من الفيوتشرز مباشرة للفحص) ---
 def get_klines(symbol, interval, limit=15):
     try:
         url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={interval}&limit={limit}"
@@ -223,7 +225,7 @@ def main_loop():
                 if candles:
                     evaluate_strategies(symbol, tf, candles)
                 
-                time.sleep(0.2) # زيادة طفيفة في الفاصل الزمني لتجنب الحظر
+                time.sleep(0.2)
                 
         print("⏳ [استراحة] انتهاء الدورة الحالية، الانتقال للدورة التالية...", flush=True)
         sys.stdout.flush()
