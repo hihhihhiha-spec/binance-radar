@@ -58,7 +58,6 @@ def get_top_futures_symbols(limit=200):
     try:
         print("📡 [بينانس] جاري جلب قائمة العملات الصاعدة من خادم السبوت البديل...", flush=True)
         sys.stdout.flush()
-        # استخدام واجهة Spot العامة لتجنب حظر IP على الفيوتشرز
         url = "https://api.binance.com/api/v3/ticker/24hr"
         response = requests.get(url, headers=HEADERS, timeout=10)
         
@@ -216,11 +215,15 @@ def main_loop():
                 time.sleep(60)
                 continue
 
-        print(f"\n🔄 [دورة فحص جديدة] فحص {len(symbols)} عملة عبر {len(timeframes)} فريمات...", flush=True)
+        print(f"\n🔄 [دورة فحص جديدة] جاري فحص {len(symbols)} عملة عبر {len(timeframes)} فريمات...", flush=True)
         sys.stdout.flush()
         
         for symbol in symbols:
             for tf in timeframes:
+                # طباعة تفصيلية لكل عملة وفريم يتم فحصه حالياً
+                print(f"🔍 فحص العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
+                sys.stdout.flush()
+                
                 candles = get_klines(symbol, tf, limit=15)
                 if candles:
                     evaluate_strategies(symbol, tf, candles)
