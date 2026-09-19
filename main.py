@@ -4,7 +4,7 @@ import time
 import os
 import threading
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # --- إعدادات تيليجرام ---
@@ -25,7 +25,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Radar REST Mode is Active")
+        self.wfile.write(b"Radar Ultimate Mode is Active")
     def log_message(self, format, *args): 
         pass
 
@@ -40,8 +40,44 @@ threading.Thread(target=run_http_server, daemon=True).start()
 
 sent_alerts = {}
 
+# --- جلب أعلى 200 عملة في الفيوتشرز حسب النسبة المئوية الصاعدة لـ 24 ساعة ---
+def get_top_futures_symbols(limit=200):
+    try:
+        print("📡 جاري جلب وتحديث قائمة أعلى العملات صعوداً في الفيوتشرز لـ 24 ساعة...", flush=True)
+        sys.stdout.flush()
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        
+        movers = []
+        for item in data:
+            symbol = item['symbol']
+            if symbol.endswith('USDT'):
+                pct = float(item['priceChangePercent'])
+                movers.append((symbol.lower(), pct))
+        
+        # ترتيب تنازلي حسب النسبة المئوية (الأعلى صعوداً في المقدمة) وبدون أي تكرار
+        movers.sort(key=lambda x: x[1], reverse=True)
+        
+        seen = set()
+        top_symbols = []
+        for m in movers:
+            if m[0] not in seen:
+                seen.add(m[0])
+                top_symbols.append(m[0])
+            if len(top_symbols) >= limit:
+                break
+                
+        print(f"🔥 تم تحديث واختيار أعلى {len(top_symbols)} عملة صعوداً بنجاح.", flush=True)
+        sys.stdout.flush()
+        return top_symbols
+    except Exception as e:
+        print(f"❌ خطأ في جلب العملات: {e}", flush=True)
+        sys.stdout.flush()
+        return []
+
 # --- جلب الشموع التاريخية لكل عملة وفريم ---
-def get_klines(symbol, interval, limit=10):
+def get_klines(symbol, interval, limit=15):
     try:
         url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={interval}&limit={limit}"
         response = requests.get(url, timeout=5)
@@ -110,35 +146,50 @@ def evaluate_strategy(symbol, tf, candles):
     except Exception as e:
         pass
 
-# --- حلقة الفحص الرئيسية (تطبع كل شيء بوضوح) ---
+# --- الحلقة الرئيسية مع التحديث التلقائي كل 5 ساعات ---
 def main_loop():
-    print("🚀 بدء تشغيل الرادار بنجاح وإرسال تنبيه البدء...", flush=True)
+    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس (وضع المراقبة المباشرة) بنجاح.")
+    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (أعلى 200 عملة صاعدة) بنجاح.")
 
-    # اخترنا أول 20 عملة تداولاً لضمان سرعة الدورة والطباعة المستمرة في السجلات
-    symbols = ['btcusdt', 'ethusdt', 'solusdt', 'xrpusdt', 'bnbusdt', 'dogeusdt', 'adausdt', 'avaxusdt', 'linkusdt', 'nearusdt']
-    timeframes = ['1m', '5m', '15m']
+    timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
+    
+    symbols = []
+    last_update_time = datetime.min
 
     while True:
-        print(f"\n🔄 --- بدء دورة فحص جديدة لـ {len(symbols)} عملة ---", flush=True)
+        current_time = datetime.now()
+        
+        # تحديث قائمة أعلى 200 عملة تلقائياً كل 5 ساعات لتفادي الحظر تماماً
+        if current_time - last_update_time >= timedelta(hours=5):
+            print("🔄 [تحديث دوري] مرور 5 ساعات، جاري تحديث قائمة أعلى 200 عملة...", flush=True)
+            sys.stdout.flush()
+            symbols = get_top_futures_symbols(limit=200)
+            last_update_time = current_time
+            if not symbols:
+                print("⚠️ فشل جلب العملات، إعادة المحاولة خلال دقيقة...", flush=True)
+                sys.stdout.flush()
+                time.sleep(60)
+                continue
+
+        print(f"\n🔄 --- بدء دورة فحص جديدة لـ {len(symbols)} عملة عبر {len(timeframes)} فريمات ---", flush=True)
         sys.stdout.flush()
         
         for symbol in symbols:
             for tf in timeframes:
-                # طباعة واضحة لاسم العملة والفريم الذي يتم فحصه الآن
-                print(f"🔍 [جاري الفحص] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
+                # طباعة واضحة وفورية لما يتم فحصه لترى الحركة في السجلات دون توقف
+                print(f"🔍 [فحص مباشر] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
                 sys.stdout.flush()
                 
                 candles = get_klines(symbol, tf, limit=15)
                 if candles:
                     evaluate_strategy(symbol, tf, candles)
                 
-                time.sleep(0.3) # فاصل زمني بسيط ومريح لعدم حدوث أي حظر
+                time.sleep(0.15) # سرعة ممتازة ومريحة لعدم تجاوز حدود الخادم أو التعرض للحظر
                 
-        print("⏳ انتهاء الدورة الحالية. الاستراحة قليلاً ثم إعادة الفحص...", flush=True)
+        print("⏳ انتهاء الدورة الحالية. جاري البدء بالدورة التالية...", flush=True)
         sys.stdout.flush()
-        time.sleep(5)
+        time.sleep(10)
 
 if __name__ == "__main__":
     main_loop()
