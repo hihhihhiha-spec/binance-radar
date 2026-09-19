@@ -25,7 +25,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar is Active")
+        self.wfile.write(b"Fixed Dual Strategy Radar is Active")
     def log_message(self, format, *args): 
         pass
 
@@ -96,7 +96,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق من الاستراتيجيتين معاً ---
+# --- التحقق الصارم والمصحح للاستراتيجيتين ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -139,32 +139,32 @@ def evaluate_strategies(symbol, tf, candles):
             pass
 
         # ---------------------------------------------------------
-        # الاستراتيجية الثانية الجديدة
+        # الاستراتيجية الثانية (المصححة بدقة صارمة جداً)
         # ---------------------------------------------------------
         try:
-            # الشمعة الأولى والثانية حمراء، الثانية أكبر حجماً وتمثل القاع وتكسر الأولى، الأجسام أكبر من الذيول، ولا تتجاوز حدود الأولى
+            # الشمعة الأولى والثانية يجب أن تكونا حمراوين وبأجسام أكبر من الذيول
             if cl1 < o1 and cl2 < o2:
                 body1 = abs(o1 - cl1)
                 body2 = abs(o2 - cl2)
                 
-                # الذيول أصغر من الأجسام للشمعتين الأولى والثانية
                 u_wick1 = h1 - max(o1, cl1)
                 l_wick1 = min(o1, cl1) - l1
                 u_wick2 = h2 - max(o2, cl2)
                 l_wick2 = min(o2, cl2) - l2
                 
                 if body1 > u_wick1 and body1 > l_wick1 and body2 > u_wick2 and body2 > l_wick2:
-                    # الشمعة الثانية أكبر من الأولى وتكسر قاعها
+                    # الشمعة الثانية أكبر حجماً من الأولى وتكسر قاعها (تمثل القاع)
                     if body2 > body1 and l2 < l1:
-                        # الشمعة الثالثة خضراء والتاكيدية الرابعة، ولا يتجاوزان قمة الشمعة الأولى
+                        # الشمعة الثالثة والرابعة يجب أن تكونا خضراوين صريحين حصرياً (منع الحمراء نهائياً)
                         if cl3 > o3 and cl4 > o4:
-                            if h3 <= h1 and h4 <= h1:
+                            # شرط أساسي: الشمعتان الثالثة والرابعة داخل نطاق الشمعة الأولى بالكامل (لا تكسر قاعها ولا تتجاوز قمتها)
+                            if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1):
                                 alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
                                 if alert_key not in sent_alerts:
                                     sent_alerts[alert_key] = True
-                                    msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                    msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية المصححة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                     send_telegram_message(msg)
-                                    print(f"🎯 تم اكتشاف نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                                    print(f"🎯 تم اكتشاف نموذج الاستراتيجية 2 المصححة للعملة: {symbol.upper()} على فريم {tf}", flush=True)
                                     sys.stdout.flush()
         except Exception:
             pass
@@ -174,9 +174,9 @@ def evaluate_strategies(symbol, tf, candles):
 
 # --- الحلقة الرئيسية مع التحديث التلقائي كل 5 ساعات ---
 def main_loop():
-    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي (الاستراتيجيتين)...", flush=True)
+    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي (النسخة المصححة والصارمة)...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (الاستراتيجيتين معاً) بنجاح.")
+    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (النسخة الصارمة المصححة) بنجاح.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     
