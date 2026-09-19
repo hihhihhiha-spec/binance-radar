@@ -25,7 +25,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Fixed Dual Strategy Radar is Active")
+        self.wfile.write(b"Precision Dual Strategy Radar is Active")
     def log_message(self, format, *args): 
         pass
 
@@ -139,10 +139,10 @@ def evaluate_strategies(symbol, tf, candles):
             pass
 
         # ---------------------------------------------------------
-        # الاستراتيجية الثانية (المصححة بدقة صارمة جداً)
+        # الاستراتيجية الثانية (المصححة: الشمعة التأكيدية لونها لا يهم بشرط النطاق)
         # ---------------------------------------------------------
         try:
-            # الشمعة الأولى والثانية يجب أن تكونا حمراوين وبأجسام أكبر من الذيول
+            # الشمعة الأولى والثانية حمراوين وأجسامها أكبر من الذيول
             if cl1 < o1 and cl2 < o2:
                 body1 = abs(o1 - cl1)
                 body2 = abs(o2 - cl2)
@@ -155,16 +155,16 @@ def evaluate_strategies(symbol, tf, candles):
                 if body1 > u_wick1 and body1 > l_wick1 and body2 > u_wick2 and body2 > l_wick2:
                     # الشمعة الثانية أكبر حجماً من الأولى وتكسر قاعها (تمثل القاع)
                     if body2 > body1 and l2 < l1:
-                        # الشمعة الثالثة والرابعة يجب أن تكونا خضراوين صريحين حصرياً (منع الحمراء نهائياً)
-                        if cl3 > o3 and cl4 > o4:
-                            # شرط أساسي: الشمعتان الثالثة والرابعة داخل نطاق الشمعة الأولى بالكامل (لا تكسر قاعها ولا تتجاوز قمتها)
+                        # الشمعة الثالثة خضراء صريحة
+                        if cl3 > o3:
+                            # الشمعة الرابعة التأكيدية: لونها لا يهم، بشرط أن تظل بالكامل داخل نطاق الشمعة الأولى
                             if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1):
                                 alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
                                 if alert_key not in sent_alerts:
                                     sent_alerts[alert_key] = True
-                                    msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية المصححة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                    msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية المعدلة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                     send_telegram_message(msg)
-                                    print(f"🎯 تم اكتشاف نموذج الاستراتيجية 2 المصححة للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                                    print(f"🎯 تم اكتشاف نموذج الاستراتيجية 2 المعدلة للعملة: {symbol.upper()} على فريم {tf}", flush=True)
                                     sys.stdout.flush()
         except Exception:
             pass
@@ -174,9 +174,9 @@ def evaluate_strategies(symbol, tf, candles):
 
 # --- الحلقة الرئيسية مع التحديث التلقائي كل 5 ساعات ---
 def main_loop():
-    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي (النسخة المصححة والصارمة)...", flush=True)
+    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (النسخة الصارمة المصححة) بنجاح.")
+    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (نسخة الاستراتيجية الثانية المعدلة) بنجاح.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     
