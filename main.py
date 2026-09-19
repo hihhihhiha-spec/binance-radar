@@ -25,7 +25,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Radar Ultimate Mode is Active")
+        self.wfile.write(b"Dual Strategy Radar is Active")
     def log_message(self, format, *args): 
         pass
 
@@ -56,7 +56,6 @@ def get_top_futures_symbols(limit=200):
                 pct = float(item['priceChangePercent'])
                 movers.append((symbol.lower(), pct))
         
-        # ترتيب تنازلي حسب النسبة المئوية (الأعلى صعوداً في المقدمة) وبدون أي تكرار
         movers.sort(key=lambda x: x[1], reverse=True)
         
         seen = set()
@@ -97,8 +96,8 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق الهندسي الصارم ---
-def evaluate_strategy(symbol, tf, candles):
+# --- التحقق من الاستراتيجيتين معاً ---
+def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
             return
@@ -109,48 +108,75 @@ def evaluate_strategy(symbol, tf, candles):
         o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
         o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
         o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
-        
-        if not (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
-            return
 
-        if cl1 >= o1: return
-        body1 = abs(o1 - cl1)
-        upper_wick1 = h1 - max(o1, cl1)
-        lower_wick1 = min(o1, cl1) - l1
-        if not (body1 > upper_wick1 and body1 > lower_wick1): return
-        if upper_wick1 > lower_wick1: return
+        # ---------------------------------------------------------
+        # الاستراتيجية الأولى
+        # ---------------------------------------------------------
+        try:
+            if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
+                if cl1 < o1:
+                    body1 = abs(o1 - cl1)
+                    upper_wick1 = h1 - max(o1, cl1)
+                    lower_wick1 = min(o1, cl1) - l1
+                    if body1 > upper_wick1 and body1 > lower_wick1 and upper_wick1 <= lower_wick1:
+                        if cl2 < o2:
+                            body2 = abs(o2 - cl2)
+                            if body2 < body1 and l2 < l1 and cl2 < l1:
+                                if cl3 > o3 and l3 >= l2:
+                                    middle_c1 = (h1 + l1) / 2
+                                    if middle_c1 <= cl3 <= h1 and h3 <= h1:
+                                        middle_c3 = (h3 + l3) / 2
+                                        if cl4 > middle_c3:
+                                            alert_key = f"{symbol}_{tf}_{c4['time']}_strat1"
+                                            if alert_key not in sent_alerts:
+                                                sent_alerts[alert_key] = True
+                                                msg = f"💎 *تنبيه بينانس (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                                send_telegram_message(msg)
+                                                print(f"🎯 تم اكتشاف نموذج الاستراتيجية 1 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                                                sys.stdout.flush()
+                                                return
+        except Exception:
+            pass
 
-        if cl2 >= o2: return
-        body2 = abs(o2 - cl2)
-        if not (body2 < body1 and l2 < l1 and cl2 < l1): return
-
-        if cl3 <= o3: return
-        if l3 < l2: return 
-        
-        middle_c1 = (h1 + l1) / 2
-        if cl3 < middle_c1: return
-        if cl3 > h1: return
-        if h3 > h1: return
-
-        middle_c3 = (h3 + l3) / 2
-        if cl4 <= middle_c3: return
-
-        alert_key = f"{symbol}_{tf}_{c4['time']}"
-        if alert_key not in sent_alerts:
-            sent_alerts[alert_key] = True
-            msg = f"💎 *تنبيه بينانس (النموذج المطابق)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-            send_telegram_message(msg)
-            print(f"🎯 تم اكتشاف النموذج وإرسال تنبيه للعملة: {symbol.upper()} على فريم {tf}", flush=True)
-            sys.stdout.flush()
+        # ---------------------------------------------------------
+        # الاستراتيجية الثانية الجديدة
+        # ---------------------------------------------------------
+        try:
+            # الشمعة الأولى والثانية حمراء، الثانية أكبر حجماً وتمثل القاع وتكسر الأولى، الأجسام أكبر من الذيول، ولا تتجاوز حدود الأولى
+            if cl1 < o1 and cl2 < o2:
+                body1 = abs(o1 - cl1)
+                body2 = abs(o2 - cl2)
+                
+                # الذيول أصغر من الأجسام للشمعتين الأولى والثانية
+                u_wick1 = h1 - max(o1, cl1)
+                l_wick1 = min(o1, cl1) - l1
+                u_wick2 = h2 - max(o2, cl2)
+                l_wick2 = min(o2, cl2) - l2
+                
+                if body1 > u_wick1 and body1 > l_wick1 and body2 > u_wick2 and body2 > l_wick2:
+                    # الشمعة الثانية أكبر من الأولى وتكسر قاعها
+                    if body2 > body1 and l2 < l1:
+                        # الشمعة الثالثة خضراء والتاكيدية الرابعة، ولا يتجاوزان قمة الشمعة الأولى
+                        if cl3 > o3 and cl4 > o4:
+                            if h3 <= h1 and h4 <= h1:
+                                alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
+                                if alert_key not in sent_alerts:
+                                    sent_alerts[alert_key] = True
+                                    msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                    send_telegram_message(msg)
+                                    print(f"🎯 تم اكتشاف نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                                    sys.stdout.flush()
+        except Exception:
+            pass
 
     except Exception as e:
         pass
 
 # --- الحلقة الرئيسية مع التحديث التلقائي كل 5 ساعات ---
 def main_loop():
-    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي...", flush=True)
+    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي (الاستراتيجيتين)...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (أعلى 200 عملة صاعدة) بنجاح.")
+    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (الاستراتيجيتين معاً) بنجاح.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     
@@ -160,7 +186,7 @@ def main_loop():
     while True:
         current_time = datetime.now()
         
-        # تحديث قائمة أعلى 200 عملة تلقائياً كل 5 ساعات لتفادي الحظر تماماً
+        # تحديث قائمة أعلى 200 عملة تلقائياً كل 5 ساعات
         if current_time - last_update_time >= timedelta(hours=5):
             print("🔄 [تحديث دوري] مرور 5 ساعات، جاري تحديث قائمة أعلى 200 عملة...", flush=True)
             sys.stdout.flush()
@@ -177,15 +203,14 @@ def main_loop():
         
         for symbol in symbols:
             for tf in timeframes:
-                # طباعة واضحة وفورية لما يتم فحصه لترى الحركة في السجلات دون توقف
                 print(f"🔍 [فحص مباشر] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
                 sys.stdout.flush()
                 
                 candles = get_klines(symbol, tf, limit=15)
                 if candles:
-                    evaluate_strategy(symbol, tf, candles)
+                    evaluate_strategies(symbol, tf, candles)
                 
-                time.sleep(0.15) # سرعة ممتازة ومريحة لعدم تجاوز حدود الخادم أو التعرض للحظر
+                time.sleep(0.15)
                 
         print("⏳ انتهاء الدورة الحالية. جاري البدء بالدورة التالية...", flush=True)
         sys.stdout.flush()
