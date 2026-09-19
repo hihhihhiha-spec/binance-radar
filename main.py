@@ -20,7 +20,7 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram Send Error: {e}", flush=True)
 
-# --- 1. حل مشكلة توقف Render ---
+# --- 1. حل مشكلة توقف سيرفر Render ---
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -39,7 +39,7 @@ threading.Thread(target=run_port_server, daemon=True).start()
 market_data = {}
 sent_alerts = {}
 
-# --- جلب أعلى العملات تداولاً عبر REST لمرة واحدة (آمن جداً ولا يسبب حظر) ---
+# --- جلب أعلى العملات تداولاً عبر REST لمرة واحدة (آمن تماماً ولا يسبب حظر) ---
 def get_top_binance_symbols(limit=100):
     try:
         print("📡 جاري جلب قائمة العملات من بينانس...", flush=True)
