@@ -28,7 +28,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Radar is Running")
+        self.wfile.write(b"Bybit Radar is Running")
     def log_message(self, format, *args):
         pass
 
@@ -47,18 +47,18 @@ threading.Thread(target=run_http_server, daemon=True).start()
 
 sent_alerts = {}
 
-# هيدر متصفح حقيقي لتجنب أي حظر
+# هيدر متصفح حقيقي
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "application/json"
 }
 
-# --- جلب أعلى العملات من واجهة Spot الآمنة ضد الحظر ---
+# --- جلب أعلى العملات صعوداً في الفيوتشرز من بايبت ---
 def get_top_futures_symbols(limit=200):
     try:
-        print("📡 [بينانس] جاري جلب قائمة العملات الصاعدة من خادم السبوت البديل...", flush=True)
+        print("📡 [بايبت] جاري جلب قائمة العملات الصاعدة (Linear Futures)...", flush=True)
         sys.stdout.flush()
-        url = "https://api.binance.com/api/v3/ticker/24hr"
+        url = "https://api.bybit.com/v5/market/tickers?category=linear"
         response = requests.get(url, headers=HEADERS, timeout=10)
         
         if response.status_code != 200:
@@ -66,7 +66,13 @@ def get_top_futures_symbols(limit=200):
             sys.stdout.flush()
             return []
             
-        data = response.json()
+        result = response.json()
+        if result.get("retCode") != 0:
+            print(f"⚠️ خطأ من API بايبت: {result.get('retMsg')}", flush=True)
+            sys.stdout.flush()
+            return []
+            
+        data = result.get("result", {}).get("list", [])
         if not isinstance(data, list):
             print(f"⚠️ البيانات المستلمة ليست قائمة صحيحة", flush=True)
             sys.stdout.flush()
@@ -74,14 +80,14 @@ def get_top_futures_symbols(limit=200):
         
         movers = []
         for item in data:
-            if isinstance(item, dict) and 'symbol' in item and 'priceChangePercent' in item:
-                symbol = item['symbol']
-                if symbol.endswith('USDT'):
-                    try:
-                        pct = float(item['priceChangePercent'])
-                        movers.append((symbol.lower(), pct))
-                    except ValueError:
-                        continue
+            symbol = item.get('symbol', '')
+            # التصفية لاختيار عقود USDT
+            if symbol.endswith('USDT'):
+                try:
+                    pct = float(item.get('price24hPcnt', 0)) * 100  # بايبت تعيد النسبة عشرياً (مثال 0.05 تعني 5%)
+                    movers.append((symbol.lower(), pct))
+                except ValueError:
+                    continue
         
         movers.sort(key=lambda x: x[1], reverse=True)
         
@@ -94,32 +100,47 @@ def get_top_futures_symbols(limit=200):
             if len(top_symbols) >= limit:
                 break
                 
-        print(f"🔥 [نجاح] تم اختيار أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
+        print(f"🔥 [نجاح] تم اختيار أعلى {len(top_symbols)} عملة من بايبت.", flush=True)
         sys.stdout.flush()
         return top_symbols
     except Exception as e:
-        print(f"❌ خطأ في جلب العملات: {e}", flush=True)
+        print(f"❌ خطأ في جلب العملات من بايبت: {e}", flush=True)
         sys.stdout.flush()
         return []
 
-# --- جلب الشموع (من الفيوتشرز مباشرة للفحص) ---
+# تحويل الفريمات لتتوافق مع معيار بايبت V5
+BYBIT_INTERVALS = {
+    '1m': '1',
+    '3m': '3',
+    '5m': '5',
+    '15m': '15',
+    '30m': '30',
+    '1h': '60',
+    '4h': '240'
+}
+
+# --- جلب الشموع التاريخية من بايبت ---
 def get_klines(symbol, interval, limit=15):
     try:
-        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={interval}&limit={limit}"
+        bybit_tf = BYBIT_INTERVALS.get(interval, '60')
+        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol.upper()}&interval={bybit_tf}&limit={limit}"
         response = requests.get(url, headers=HEADERS, timeout=5)
         if response.status_code == 200:
-            raw_data = response.json()
-            if isinstance(raw_data, list):
-                candles = []
-                for item in raw_data:
-                    candles.append({
-                        'time': item[0],
-                        'o': float(item[1]),
-                        'h': float(item[2]),
-                        'l': float(item[3]),
-                        'c': float(item[4])
-                    })
-                return candles
+            res_json = response.json()
+            if res_json.get("retCode") == 0:
+                raw_data = res_json.get("result", {}).get("list", [])
+                if isinstance(raw_data, list):
+                    candles = []
+                    # بايبت ترجع الشموع من الأحدث إلى الأقدم، لذا نقوم بعكسها لتصبح من الأقدم للأحدث
+                    for item in reversed(raw_data):
+                        candles.append({
+                            'time': int(item[0]),
+                            'o': float(item[1]),
+                            'h': float(item[2]),
+                            'l': float(item[3]),
+                            'c': float(item[4])
+                        })
+                    return candles
     except Exception as e:
         pass
     return []
@@ -156,7 +177,7 @@ def evaluate_strategies(symbol, tf, candles):
                                             alert_key = f"{symbol}_{tf}_{c4['time']}_strat1"
                                             if alert_key not in sent_alerts:
                                                 sent_alerts[alert_key] = True
-                                                msg = f"💎 *تنبيه بينانس (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                                msg = f"💎 *تنبيه بايبت (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                                 send_telegram_message(msg)
                                                 print(f"🎯 [هدف] نموذج الاستراتيجية 1 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
                                                 sys.stdout.flush()
@@ -181,7 +202,7 @@ def evaluate_strategies(symbol, tf, candles):
                                     alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
                                     if alert_key not in sent_alerts:
                                         sent_alerts[alert_key] = True
-                                        msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                        msg = f"🚀 *تنبيه بايبت (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                         send_telegram_message(msg)
                                         print(f"🎯 [هدف] نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
                                         sys.stdout.flush()
@@ -193,9 +214,9 @@ def evaluate_strategies(symbol, tf, candles):
 
 # --- الدورة الرئيسية ---
 def main_loop():
-    print("🚀 [بدء التشغيل] تم تشغيل النظام الرئيسي للرادار...", flush=True)
+    print("🚀 [بدء التشغيل] تم تشغيل رادار بايبت الرئيسي...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس بنجاح وبدء المراقبة الفورية.")
+    send_telegram_message("🟢 تم تشغيل رادار بايبت بنجاح وبدء المراقبة الفورية.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -205,7 +226,7 @@ def main_loop():
         current_time = datetime.now()
         
         if not symbols or (current_time - last_update_time >= timedelta(hours=5)):
-            print("🔄 [تحديث] جلب قائمة العملات الصاعدة...", flush=True)
+            print("🔄 [تحديث] جلب قائمة العملات الصاعدة من بايبت...", flush=True)
             sys.stdout.flush()
             symbols = get_top_futures_symbols(limit=200)
             last_update_time = current_time
@@ -220,7 +241,6 @@ def main_loop():
         
         for symbol in symbols:
             for tf in timeframes:
-                # طباعة تفصيلية لكل عملة وفريم يتم فحصه حالياً
                 print(f"🔍 فحص العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
                 sys.stdout.flush()
                 
@@ -228,7 +248,7 @@ def main_loop():
                 if candles:
                     evaluate_strategies(symbol, tf, candles)
                 
-                time.sleep(0.2)
+                time.sleep(0.15)
                 
         print("⏳ [استراحة] انتهاء الدورة الحالية، الانتقال للدورة التالية...", flush=True)
         sys.stdout.flush()
