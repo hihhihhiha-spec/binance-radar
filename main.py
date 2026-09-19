@@ -20,20 +20,23 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"Telegram Send Error: {e}", flush=True)
 
-# --- 1. حل مشكلة توقف سيرفر Render ---
-class DummyServer(BaseHTTPRequestHandler):
+# --- 1. سيرفر HTTP لضمان استمرار عمل Render دون إغلاق ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Binance WS Radar is Active")
-    def log_message(self, format, *args): return
+        self.wfile.write(b"Binance WS Radar is Active and Running Perfectly")
+    def log_message(self, format, *args): 
+        pass
 
-def run_port_server():
+def run_http_server():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(('0.0.0.0', port), DummyServer)
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    print(f"🌐 HTTP Server running on port {port}", flush=True)
     server.serve_forever()
 
-threading.Thread(target=run_port_server, daemon=True).start()
+# بدء تشغيل السيرفر في الخلفية فوراً
+threading.Thread(target=run_http_server, daemon=True).start()
 
 # تخزين الشموع الحية لكل عملة وفريم
 market_data = {}
@@ -138,7 +141,6 @@ def on_message(ws, message):
             if key not in market_data:
                 market_data[key] = []
             
-            # تحديث أو إضافة الشمعة
             if market_data[key] and market_data[key][-1]['time'] == candle['time']:
                 market_data[key][-1] = candle
             else:
@@ -146,7 +148,6 @@ def on_message(ws, message):
                 if len(market_data[key]) > 20:
                     market_data[key].pop(0)
             
-            # الفحص فقط عند إغلاق الشمعة لضمان الدقة المطلقة
             if is_closed:
                 evaluate_strategy(symbol, tf, market_data[key])
     except Exception as e:
@@ -173,13 +174,11 @@ def start_websocket_radar():
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     
-    # بناء روابط الاستماع لكل العملات والفريمات دفعة واحدة
     streams = []
     for s in symbols:
         for tf in timeframes:
             streams.append(f"{s}@kline_{tf}")
     
-    # بينانس تدعم دمج الـ streams في رابط واحد طويل
     stream_url = f"wss://fstream.binance.com/stream?streams={'/'.join(streams)}"
     
     ws = websocket.WebSocketApp(
