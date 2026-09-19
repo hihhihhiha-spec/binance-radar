@@ -24,7 +24,7 @@ class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Radar is Active")
+        self.wfile.write(b"Binance Radar is Active")
     def log_message(self, format, *args): return
 
 def run_port_server():
@@ -34,10 +34,10 @@ def run_port_server():
 
 threading.Thread(target=run_port_server, daemon=True).start()
 
-# --- 2. إعدادات بايبيت فيوتشرز (Bybit USDT Linear Perpetual) ---
-exchange = ccxt.bybit({
+# --- 2. إعدادات بينانس فيوتشرز (Binance USDT-M Futures) ---
+exchange = ccxt.binance({
     'options': {
-        'defaultType': 'linear',
+        'defaultType': 'future',
     },
     'enableRateLimit': True
 })
@@ -45,10 +45,10 @@ exchange = ccxt.bybit({
 TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 sent_alerts = {}
 
-# --- دالة لجلب أعلى العملات صعوداً مع تخزينها لحماية الـ IP من الحظر ---
-def get_top_futures_gainers(limit=150):
+# --- دالة جلب العملات مع التخزين كل 5 ساعات لحماية الـ IP ومنع خطأ 418 في بينانس ---
+def get_top_binance_futures_gainers(limit=150):
     try:
-        print("📡 جاري تحديث قائمة عملات فيوتشرز بايبيت...", flush=True)
+        print("📡 جاري جلب وتحديث قائمة عملات فيوتشرز بينانس...", flush=True)
         tickers = exchange.fetch_tickers()
         
         movers = []
@@ -63,16 +63,16 @@ def get_top_futures_gainers(limit=150):
                     movers.append((symbol, float(pct)))
         
         if not movers:
-            print("⚠️ لم يتم استرجاع أي بيانات للفيوتشرز من بايبيت.", flush=True)
+            print("⚠️ لم يتم استرجاع أي بيانات لفيوتشرز بينانس.", flush=True)
             return []
 
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
-        print(f"🔥 تم تخزين واختيار أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
+        print(f"🔥 تم تخزين واختيار أعلى {len(top_symbols)} عملة في بينانس بنجاح.", flush=True)
         return top_symbols
         
     except Exception as e:
-        print(f"❌ خطأ أثناء جلب فيوتشرز بايبيت: {e}", flush=True)
+        print(f"❌ خطأ أثناء جلب فيوتشرز بينانس: {e}", flush=True)
         return []
 
 # --- الفحص الهندسي الصارم: موجة هابطة + الشمعة 2 قاع أدنى + تصفية الذيول العلوية ---
@@ -130,7 +130,7 @@ def check_strict_strategy_4(symbol, tf):
         if cl4 <= middle_c3: return False
 
         print(f"\n==================================================")
-        print(f"🎯 تطابق نموذج موجة هابطة: {symbol} | الفريم: {tf}")
+        print(f"🎯 تطابق نموذج بينانس (موجة هابطة): {symbol} | الفريم: {tf}")
         print(f"🔴 الشمعة 1: منتصفها={middle_c1}")
         print(f"🔴 الشمعة 2 (القاع الأدنى): قاع={l2}")
         print(f"🟢 الشمعة 3 (إغلاق فوق المنتصف): إغلاق 3={cl3}")
@@ -138,7 +138,7 @@ def check_strict_strategy_4(symbol, tf):
         print(f"==================================================\n", flush=True)
 
         candle_timestamp = c4[0]
-        alert_key = f"{symbol}_{tf}_{candle_timestamp}_cache_protect_v4"
+        alert_key = f"{symbol}_{tf}_{candle_timestamp}_binance_cache_v4"
         
         if alert_key not in sent_alerts:
             sent_alerts[alert_key] = True
@@ -149,20 +149,20 @@ def check_strict_strategy_4(symbol, tf):
         return False
 
 
-print("🚀 Safe Radar Started with 5-Hour Cache Protection.", flush=True)
-send_telegram_message("🚀 تم تفعيل حماية الحظر: سيعمل الرادار على تخزين العملات وتحديثها كل 5 ساعات حصرياً.")
+print("🚀 Binance Radar Started with 5-Hour Cache Protection.", flush=True)
+send_telegram_message("🚀 تم تفعيل رادار بينانس مع تخزين العملات كل 5 ساعات لحمايتك من الحظر نهائياً.")
 
 last_movers_update = 0
 top_symbols_cache = []
-UPDATE_INTERVAL = 5 * 60 * 60  # 5 ساعات بالثواني (18000 ثانية)
+UPDATE_INTERVAL = 5 * 60 * 60  # 5 ساعات بالثواني
 
 while True:
     try:
         current_time = time.time()
         
-        # تحديث قائمة العملات كل 5 ساعات فقط لمنع أي ضغط أو حظر
+        # تحديث قائمة العملات كل 5 ساعات فقط لتفادي حظر بينانس (418)
         if (current_time - last_movers_update) > UPDATE_INTERVAL or not top_symbols_cache:
-            top_symbols_cache = get_top_futures_gainers(limit=150)
+            top_symbols_cache = get_top_binance_futures_gainers(limit=150)
             last_movers_update = current_time
 
         if not top_symbols_cache:
@@ -172,10 +172,10 @@ while True:
         for index, symbol in enumerate(top_symbols_cache, 1):
             for tf in TIMEFRAMES:
                 if check_strict_strategy_4(symbol, tf):
-                    alert_msg = f"💎 *تنبيه بايبيت (موجة هابطة محمية)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+                    alert_msg = f"💎 *تنبيه بينانس (موجة هابطة + قاع الشمعة 2)*\n\n🔹 العملة: `{symbol}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
                     send_telegram_message(alert_msg)
                 
-                time.sleep(0.5)  # فاصل زمني أمان إضافي بين فحص كل عملة
+                time.sleep(0.6)  # فاصل زمني أمان إضافي يتناسب مع أوزان طلبات بينانس
         
         time.sleep(15)
 
