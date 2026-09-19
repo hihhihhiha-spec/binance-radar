@@ -4,7 +4,6 @@ import time
 import os
 import threading
 import requests
-import websocket
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -17,18 +16,16 @@ def send_telegram_message(message):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
         response = requests.post(url, json=payload, timeout=5)
-        print(f"📤 [تيليجرام] حالة الإرسال: {response.status_code}", flush=True)
-        sys.stdout.flush()
+        print(f"📤 [تيليجرام] تم الإرسال بنجاح (الكود: {response.status_code})", flush=True)
     except Exception as e:
-        print(f"❌ Telegram Send Error: {e}", flush=True)
-        sys.stdout.flush()
+        print(f"❌ Telegram Error: {e}", flush=True)
 
 # --- سيرفر HTTP لضمان استمرار عمل Render ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Radar is Active")
+        self.wfile.write(b"Radar REST Mode is Active")
     def log_message(self, format, *args): 
         pass
 
@@ -41,34 +38,30 @@ def run_http_server():
 
 threading.Thread(target=run_http_server, daemon=True).start()
 
-market_data = {}
 sent_alerts = {}
 
-def get_top_binance_symbols(limit=30):
+# --- جلب الشموع التاريخية لكل عملة وفريم ---
+def get_klines(symbol, interval, limit=10):
     try:
-        print("📡 جاري جلب قائمة العملات من بينانس...", flush=True)
-        sys.stdout.flush()
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        
-        movers = []
-        for item in data:
-            symbol = item['symbol']
-            if symbol.endswith('USDT'):
-                pct = float(item['priceChangePercent'])
-                movers.append((symbol.lower(), pct))
-        
-        movers.sort(key=lambda x: x[1], reverse=True)
-        top_symbols = [m[0] for m in movers[:limit]]
-        print(f"🔥 تم اختيار أعلى {len(top_symbols)} عملة للمراقبة المباشرة.", flush=True)
-        sys.stdout.flush()
-        return top_symbols
+        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={interval}&limit={limit}"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            raw_data = response.json()
+            candles = []
+            for item in raw_data:
+                candles.append({
+                    'time': item[0],
+                    'o': float(item[1]),
+                    'h': float(item[2]),
+                    'l': float(item[3]),
+                    'c': float(item[4])
+                })
+            return candles
     except Exception as e:
-        print(f"❌ خطأ في جلب العملات: {e}", flush=True)
-        sys.stdout.flush()
-        return []
+        pass
+    return []
 
+# --- التحقق الهندسي الصارم ---
 def evaluate_strategy(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -109,88 +102,43 @@ def evaluate_strategy(symbol, tf, candles):
         alert_key = f"{symbol}_{tf}_{c4['time']}"
         if alert_key not in sent_alerts:
             sent_alerts[alert_key] = True
-            msg = f"💎 *تنبيه بينانس*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+            msg = f"💎 *تنبيه بينانس (النموذج المطابق)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
             send_telegram_message(msg)
-            print(f"🎯 تم إرسال تنبيه مطابقة للعملة: {symbol.upper()}", flush=True)
+            print(f"🎯 تم اكتشاف النموذج وإرسال تنبيه للعملة: {symbol.upper()} على فريم {tf}", flush=True)
             sys.stdout.flush()
 
     except Exception as e:
-        print(f"خطأ في الاستراتيجية: {e}", flush=True)
-        sys.stdout.flush()
+        pass
 
-def on_message(ws, message):
-    try:
-        data = json.loads(message)
-        if 'k' in data:
-            k = data['k']
-            symbol = data['s'].lower()
-            tf = k['i']
-            is_closed = k['x']
-            
-            candle = {
-                'time': k['t'],
-                'o': float(k['o']), 'h': float(k['h']),
-                'l': float(k['l']), 'c': float(k['c'])
-            }
-            
-            key = f"{symbol}_{tf}"
-            if key not in market_data:
-                market_data[key] = []
-            
-            if market_data[key] and market_data[key][-1]['time'] == candle['time']:
-                market_data[key][-1] = candle
-            else:
-                market_data[key].append(candle)
-                if len(market_data[key]) > 20:
-                    market_data[key].pop(0)
-            
-            # طباعة فورية تظهر في السجلات مباشرة
-            print(f"🔍 فحص العملة: {symbol.upper()} | الفريم: {tf} | السعر: {candle['c']}", flush=True)
-            sys.stdout.flush()
-            
-            if is_closed:
-                print(f"🔒 إغلاق شمعة للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+# --- حلقة الفحص الرئيسية (تطبع كل شيء بوضوح) ---
+def main_loop():
+    print("🚀 بدء تشغيل الرادار بنجاح وإرسال تنبيه البدء...", flush=True)
+    sys.stdout.flush()
+    send_telegram_message("🟢 تم تشغيل رادار بينانس (وضع المراقبة المباشرة) بنجاح.")
+
+    # اخترنا أول 20 عملة تداولاً لضمان سرعة الدورة والطباعة المستمرة في السجلات
+    symbols = ['btcusdt', 'ethusdt', 'solusdt', 'xrpusdt', 'bnbusdt', 'dogeusdt', 'adausdt', 'avaxusdt', 'linkusdt', 'nearusdt']
+    timeframes = ['1m', '5m', '15m']
+
+    while True:
+        print(f"\n🔄 --- بدء دورة فحص جديدة لـ {len(symbols)} عملة ---", flush=True)
+        sys.stdout.flush()
+        
+        for symbol in symbols:
+            for tf in timeframes:
+                # طباعة واضحة لاسم العملة والفريم الذي يتم فحصه الآن
+                print(f"🔍 [جاري الفحص] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
                 sys.stdout.flush()
-                evaluate_strategy(symbol, tf, market_data[key])
-    except Exception as e:
-        print(f"خطأ في رسالة WS: {e}", flush=True)
+                
+                candles = get_klines(symbol, tf, limit=15)
+                if candles:
+                    evaluate_strategy(symbol, tf, candles)
+                
+                time.sleep(0.3) # فاصل زمني بسيط ومريح لعدم حدوث أي حظر
+                
+        print("⏳ انتهاء الدورة الحالية. الاستراحة قليلاً ثم إعادة الفحص...", flush=True)
         sys.stdout.flush()
-
-def on_error(ws, error):
-    print(f"WS Error: {error}", flush=True)
-    sys.stdout.flush()
-
-def on_close(ws, code, msg):
-    print("WS Closed. Reconnecting...", flush=True)
-    sys.stdout.flush()
-    time.sleep(3)
-    start_websocket_radar()
-
-def on_open(ws):
-    print("✅ تم الاتصال بنجاح بقنوات بينانس الحية!", flush=True)
-    sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس بنجاح وبدأ المراقبة المباشرة.")
-
-def start_websocket_radar():
-    symbols = get_top_binance_symbols(limit=30)
-    if not symbols:
         time.sleep(5)
-        start_websocket_radar()
-        return
-
-    timeframes = ['1m', '5m', '1h']
-    
-    streams = [f"{s}@kline_{tf}" for s in symbols for tf in timeframes]
-    stream_url = f"wss://fstream.binance.com/stream?streams={'/'.join(streams)}"
-    
-    ws = websocket.WebSocketApp(
-        stream_url,
-        on_open=on_open,
-        on_message=on_message,
-        on_error=on_error,
-        on_close=on_close
-    )
-    ws.run_forever(ping_interval=30, ping_timeout=10)
 
 if __name__ == "__main__":
-    start_websocket_radar()
+    main_loop()
