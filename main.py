@@ -58,7 +58,7 @@ def get_top_binance_symbols(limit=100):
         
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
-        print(f"🔥 تم اختيار أعلى {len(top_symbols)} عملة. العينة: {top_symbols[:10]}...", flush=True)
+        print(f"🔥 تم اختيار أعلى {len(top_symbols)} عملة بنجاح.", flush=True)
         return top_symbols
     except Exception as e:
         print(f"❌ خطأ في جلب العملات: {e}", flush=True)
@@ -117,7 +117,7 @@ def evaluate_strategy(symbol, tf, candles):
     except Exception as e:
         pass
 
-# --- استقبال بيانات الـ WebSocket الحية مع طباعة كل عملة يتم فحصها وتحديثها ---
+# --- استقبال بيانات الـ WebSocket الحية ---
 def on_message(ws, message):
     try:
         data = json.loads(message)
@@ -146,12 +146,11 @@ def on_message(ws, message):
                 if len(market_data[key]) > 20:
                     market_data[key].pop(0)
             
-            # 🔍 طباعة مباشرة لكل عملة يصلها تحديث من السوق لترى أنها تعمل وتفحص أمام عينك
-            print(f"👁️ [فحص حركة] العملة: {symbol.upper()} | الفريم: {tf} | السعر الحالي: {candle['c']}", flush=True)
+            # طباعة فورية لكل حركة وصول بيانات للتأكد من أن السيرفر حي ولا يتوقف
+            print(f"👁️ [يستقبل ويراقب] العملة: {symbol.upper()} | الفريم: {tf} | السعر: {candle['c']}", flush=True)
             
-            # الفحص الصارم عند إغلاق الشمعة
             if is_closed:
-                print(f"🔒 [إغلاق شمعة] تم إغلاق شمعة لـ {symbol.upper()} على فريم {tf} - جاري تطبيق شروط النموذج...", flush=True)
+                print(f"🔒 [إغلاق شمعة] فحص شمعة مغلقة لـ {symbol.upper()} على فريم {tf}", flush=True)
                 evaluate_strategy(symbol, tf, market_data[key])
     except Exception as e:
         pass
