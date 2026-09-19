@@ -58,20 +58,21 @@ def get_top_binance_symbols(limit=100):
         
         movers.sort(key=lambda x: x[1], reverse=True)
         top_symbols = [m[0] for m in movers[:limit]]
-        print(f"🔥 تم اختيار أعلى {len(top_symbols)} عملة للربط المباشر بنجاح.", flush=True)
+        
+        # طباعة بعض العملات التي يتم مراقبتها لتتأكد منها بعينك
+        print(f"🔥 تم اختيار أعلى {len(top_symbols)} عملة. عينة من العملات قيد المراقبة: {top_symbols[:10]}...", flush=True)
         return top_symbols
     except Exception as e:
         print(f"❌ خطأ في جلب العملات: {e}", flush=True)
         return []
 
-# --- التحقق الهندسي الصارم مع طباعة ما يتم فحصه ---
+# --- التحقق الهندسي الصارم مع طباعة تفصيلية عند الفحص ---
 def evaluate_strategy(symbol, tf, candles):
     try:
         if len(candles) < 7:
             return
         
-        # طباعة تفيد بأن الرادار يفحص هذه العملة والفريم عند إغلاق الشمعة
-        print(f"🔍 [فحص] العملة: {symbol.upper()} | الفريم: {tf} | عدد الشموع المتاحة: {len(candles)}", flush=True)
+        print(f"🔍 [فحص إغلاق شمعة] العملة: {symbol.upper()} | الفريم: {tf} | عدد الشموع: {len(candles)}", flush=True)
         
         c_prev2, c_prev1, c1, c2, c3, c4 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2], candles[-1]
         
@@ -116,7 +117,7 @@ def evaluate_strategy(symbol, tf, candles):
             sent_alerts[alert_key] = True
             msg = f"💎 *تنبيه بينانس الحي (WebSocket)*\n\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
             send_telegram_message(msg)
-            print(f"🎯 🚀 تم اكتشاف النموذج وإرسال تنبيه مطابقة: {symbol} على فريم {tf}", flush=True)
+            print(f"🎯 🚀 تم اكتشاف النموذج وإرسال تنبيه مطابقة: {symbol.upper()} على فريم {tf}", flush=True)
 
     except Exception as e:
         print(f"⚠️ خطأ أثناء الفحص لـ {symbol}: {e}", flush=True)
@@ -150,7 +151,7 @@ def on_message(ws, message):
                 if len(market_data[key]) > 20:
                     market_data[key].pop(0)
             
-            # سيتم الفحص فقط عند إغلاق الشمعة لحظياً وطباعة النتيجة في السجلات
+            # إذا أغلقت الشمعة، نقوم بتنفيذ استراتيجية الفحص الهندسي الصارم وطباعة اسم العملة
             if is_closed:
                 evaluate_strategy(symbol, tf, market_data[key])
     except Exception as e:
@@ -165,8 +166,8 @@ def on_close(ws, close_status_code, close_msg):
     start_websocket_radar()
 
 def on_open(ws):
-    print("✅ Connected to Binance WebSocket Stream successfully and Monitoring!", flush=True)
-    send_telegram_message("🚀 تم تفعيل الرادار بنجاح وتتم مراقبة إغلاق الشمعة وفحصها لحظياً.")
+    print("✅ Connected to Binance WebSocket Stream successfully! Monitoring live candle closes...", flush=True)
+    send_telegram_message("🚀 تم تفعيل الرادار بنجاح، وهو يراقب العملات الآن لحظياً.")
 
 def start_websocket_radar():
     symbols = get_top_binance_symbols(limit=100)
@@ -181,6 +182,8 @@ def start_websocket_radar():
     for s in symbols:
         for tf in timeframes:
             streams.append(f"{s}@kline_{tf}")
+    
+    print(f"🔄 جاري فتح اشتراكات الـ WebSocket لـ {len(symbols)} عملة عبر {len(timeframes)} فريمات...", flush=True)
     
     stream_url = f"wss://fstream.binance.com/stream?streams={'/'.join(streams)}"
     
