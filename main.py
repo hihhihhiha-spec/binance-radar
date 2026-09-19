@@ -25,7 +25,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Flexible Radar is Active")
+        self.wfile.write(b"Ultimate Accurate Radar is Active")
     def log_message(self, format, *args): 
         pass
 
@@ -96,7 +96,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق من الاستراتيجيتين مع التعديل الجديد ---
+# --- التحقق الصارم والمحدث للاستراتيجيتين ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -139,32 +139,34 @@ def evaluate_strategies(symbol, tf, candles):
             pass
 
         # ---------------------------------------------------------
-        # الاستراتيجية الثانية (المعدلة: الذيل السفلي للشمعة الثانية عادي)
+        # الاستراتيجية الثانية (المحدثة: الشمعة الرابعة تغلق فوق منتصف الثالثة بغض النظر عن لونها)
         # ---------------------------------------------------------
         try:
-            # الشمعة الأولى والثانية حمراوين
-            if cl1 < o1 and cl2 < o2:
+            # الشمعة الأولى حمراء (جسمها أكبر من الذيول)
+            if cl1 < o1:
                 body1 = abs(o1 - cl1)
-                body2 = abs(o2 - cl2)
-                
                 u_wick1 = h1 - max(o1, cl1)
                 l_wick1 = min(o1, cl1) - l1
                 
-                # الشمعة الأولى تحافظ على شرط الجسم والديول
                 if body1 > u_wick1 and body1 > l_wick1:
-                    # الشمعة الثانية: جسمها أكبر من جسم الأولى وتكسر قاعها (الذيل السفلي مسموح يكون كبير عادي)
-                    if body2 > body1 and l2 < l1:
-                        # الشمعة الثالثة خضراء صريحة
-                        if cl3 > o3:
-                            # الشمعة الرابعة التأكيدية: لونها لا يهم، بشرط النطاق ضمن الشمعة الأولى
-                            if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1):
-                                alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
-                                if alert_key not in sent_alerts:
-                                    sent_alerts[alert_key] = True
-                                    msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية المرنة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                                    send_telegram_message(msg)
-                                    print(f"🎯 تم اكتشاف نموذج الاستراتيجية 2 المرنة للعملة: {symbol.upper()} على فريم {tf}", flush=True)
-                                    sys.stdout.flush()
+                    # الشمعة الثانية حمراء، أكبر حجماً من الأولى وتكسر قاعها
+                    if cl2 < o2:
+                        body2 = abs(o2 - cl2)
+                        if body2 > body1 and l2 < l1:
+                            # الشمعة الثالثة خضراء صريحة
+                            if cl3 > o3:
+                                # حساب منتصف الشمعة الثالثة
+                                middle_c3 = (h3 + l3) / 2
+                                
+                                # الشمعة الرابعة: داخل نطاق الشمعة الأولى، وإغلاقها فوق منتصف الشمعة الثالثة (حمراء أو خضراء لا يهم)
+                                if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1) and (cl4 > middle_c3):
+                                    alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
+                                    if alert_key not in sent_alerts:
+                                        sent_alerts[alert_key] = True
+                                        msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية - إغلاق الرابعة فوق منتصف الثالثة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                        send_telegram_message(msg)
+                                        print(f"🎯 تم اكتشاف نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                                        sys.stdout.flush()
         except Exception:
             pass
 
@@ -173,9 +175,9 @@ def evaluate_strategies(symbol, tf, candles):
 
 # --- الحلقة الرئيسية مع التحديث التلقائي كل 5 ساعات ---
 def main_loop():
-    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي (النسخة المرنة)...", flush=True)
+    print("🚀 بدء تشغيل رادار الفيوتشرز الذكي (النسخة النهائية المحدثة)...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (نسخة الاستراتيجية الثانية المرنة) بنجاح.")
+    send_telegram_message("🟢 تم تشغيل رادار بينانس للفيوتشرز (تحديث شرط الشمعة الرابعة) بنجاح.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     
