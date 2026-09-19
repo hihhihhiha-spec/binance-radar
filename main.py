@@ -35,14 +35,13 @@ def run_http_server():
     print(f"🌐 HTTP Server running on port {port}", flush=True)
     server.serve_forever()
 
-# بدء تشغيل السيرفر في الخلفية فوراً
 threading.Thread(target=run_http_server, daemon=True).start()
 
 # تخزين الشموع الحية لكل عملة وفريم
 market_data = {}
 sent_alerts = {}
 
-# --- جلب أعلى العملات تداولاً عبر REST لمرة واحدة (آمن تماماً ولا يسبب حظر) ---
+# --- جلب أعلى العملات تداولاً عبر REST لمرة واحدة ---
 def get_top_binance_symbols(limit=100):
     try:
         print("📡 جاري جلب قائمة العملات من بينانس...", flush=True)
@@ -65,11 +64,14 @@ def get_top_binance_symbols(limit=100):
         print(f"❌ خطأ في جلب العملات: {e}", flush=True)
         return []
 
-# --- التحقق الهندسي الصارم (صفر تسامح + موجة هابطة + تصفية الذيول) ---
+# --- التحقق الهندسي الصارم مع طباعة ما يتم فحصه ---
 def evaluate_strategy(symbol, tf, candles):
     try:
         if len(candles) < 7:
             return
+        
+        # طباعة تفيد بأن الرادار يفحص هذه العملة والفريم عند إغلاق الشمعة
+        print(f"🔍 [فحص] العملة: {symbol.upper()} | الفريم: {tf} | عدد الشموع المتاحة: {len(candles)}", flush=True)
         
         c_prev2, c_prev1, c1, c2, c3, c4 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2], candles[-1]
         
@@ -114,10 +116,10 @@ def evaluate_strategy(symbol, tf, candles):
             sent_alerts[alert_key] = True
             msg = f"💎 *تنبيه بينانس الحي (WebSocket)*\n\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`\n⏰ الوقت: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
             send_telegram_message(msg)
-            print(f"🎯 تم إرسال تنبيه مطابق: {symbol} على فريم {tf}", flush=True)
+            print(f"🎯 🚀 تم اكتشاف النموذج وإرسال تنبيه مطابقة: {symbol} على فريم {tf}", flush=True)
 
     except Exception as e:
-        pass
+        print(f"⚠️ خطأ أثناء الفحص لـ {symbol}: {e}", flush=True)
 
 # --- استقبال بيانات الـ WebSocket الحية ---
 def on_message(ws, message):
@@ -127,7 +129,7 @@ def on_message(ws, message):
             k = data['k']
             symbol = data['s'].lower()
             tf = k['i']
-            is_closed = k['x'] # هل اغلقة الشمعة؟
+            is_closed = k['x'] # هل أغلقت الشمعة؟
             
             candle = {
                 'time': k['t'],
@@ -148,6 +150,7 @@ def on_message(ws, message):
                 if len(market_data[key]) > 20:
                     market_data[key].pop(0)
             
+            # سيتم الفحص فقط عند إغلاق الشمعة لحظياً وطباعة النتيجة في السجلات
             if is_closed:
                 evaluate_strategy(symbol, tf, market_data[key])
     except Exception as e:
@@ -162,8 +165,8 @@ def on_close(ws, close_status_code, close_msg):
     start_websocket_radar()
 
 def on_open(ws):
-    print("✅ Connected to Binance WebSocket Stream successfully!", flush=True)
-    send_telegram_message("🚀 تم تفعيل رادار بينانس الحي عبر WebSocket بنجاح وبدون أي حظر.")
+    print("✅ Connected to Binance WebSocket Stream successfully and Monitoring!", flush=True)
+    send_telegram_message("🚀 تم تفعيل الرادار بنجاح وتتم مراقبة إغلاق الشمعة وفحصها لحظياً.")
 
 def start_websocket_radar():
     symbols = get_top_binance_symbols(limit=100)
