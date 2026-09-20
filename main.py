@@ -28,7 +28,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Binance Radar is Running")
+        self.wfile.write(b"Bybit Radar is Running")
     def log_message(self, format, *args):
         pass
 
@@ -53,12 +53,12 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# --- جلب أعلى العملات من واجهة Spot الآمنة ضد الحظر ---
+# --- جلب أعلى العملات صعوداً في الفيوتشرز من بايبت ---
 def get_top_futures_symbols(limit=200):
     try:
-        print("📡 [بينانس] جاري جلب قائمة العملات الصاعدة...", flush=True)
+        print("📡 [بايبت] جاري جلب قائمة العملات الصاعدة (Linear Futures)...", flush=True)
         sys.stdout.flush()
-        url = "https://api.binance.com/api/v3/ticker/24hr"
+        url = "https://api.bybit.com/v5/market/tickers?category=linear"
         response = requests.get(url, headers=HEADERS, timeout=10)
         
         if response.status_code != 200:
@@ -66,7 +66,13 @@ def get_top_futures_symbols(limit=200):
             sys.stdout.flush()
             return []
             
-        data = response.json()
+        result = response.json()
+        if result.get("retCode") != 0:
+            print(f"⚠️ خطأ من API بايبت: {result.get('retMsg')}", flush=True)
+            sys.stdout.flush()
+            return []
+            
+        data = result.get("result", {}).get("list", [])
         if not isinstance(data, list):
             print(f"⚠️ البيانات المستلمة ليست قائمة صحيحة", flush=True)
             sys.stdout.flush()
@@ -74,14 +80,13 @@ def get_top_futures_symbols(limit=200):
         
         movers = []
         for item in data:
-            if isinstance(item, dict) and 'symbol' in item and 'priceChangePercent' in item:
-                symbol = item['symbol']
-                if symbol.endswith('USDT'):
-                    try:
-                        pct = float(item['priceChangePercent'])
-                        movers.append((symbol.lower(), pct))
-                    except ValueError:
-                        continue
+            symbol = item.get('symbol', '')
+            if symbol.endswith('USDT'):
+                try:
+                    pct = float(item.get('price24hPcnt', 0)) * 100
+                    movers.append((symbol.lower(), pct))
+                except ValueError:
+                    continue
         
         movers.sort(key=lambda x: x[1], reverse=True)
         
@@ -94,37 +99,51 @@ def get_top_futures_symbols(limit=200):
             if len(top_symbols) >= limit:
                 break
                 
-        print(f"🔥 [نجاح] تم اختيار أعلى {len(top_symbols)} عملة من بينانس بنجاح.", flush=True)
+        print(f"🔥 [نجاح] تم اختيار أعلى {len(top_symbols)} عملة من بايبت بنجاح.", flush=True)
         sys.stdout.flush()
         return top_symbols
     except Exception as e:
-        print(f"❌ خطأ في جلب العملات من بينانس: {e}", flush=True)
+        print(f"❌ خطأ في جلب العملات من بايبت: {e}", flush=True)
         sys.stdout.flush()
         return []
 
-# --- جلب الشموع (من الفيوتشرز مباشرة للفحص) ---
+# تحويل الفريمات لتتوافق مع معيار بايبت V5
+BYBIT_INTERVALS = {
+    '1m': '1',
+    '3m': '3',
+    '5m': '5',
+    '15m': '15',
+    '30m': '30',
+    '1h': '60',
+    '4h': '240'
+}
+
+# --- جلب الشموع التاريخية من بايبت ---
 def get_klines(symbol, interval, limit=15):
     try:
-        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={interval}&limit={limit}"
+        bybit_tf = BYBIT_INTERVALS.get(interval, '60')
+        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol.upper()}&interval={bybit_tf}&limit={limit}"
         response = requests.get(url, headers=HEADERS, timeout=5)
         if response.status_code == 200:
-            raw_data = response.json()
-            if isinstance(raw_data, list):
-                candles = []
-                for item in raw_data:
-                    candles.append({
-                        'time': item[0],
-                        'o': float(item[1]),
-                        'h': float(item[2]),
-                        'l': float(item[3]),
-                        'c': float(item[4])
-                    })
-                return candles
+            res_json = response.json()
+            if res_json.get("retCode") == 0:
+                raw_data = res_json.get("result", {}).get("list", [])
+                if isinstance(raw_data, list):
+                    candles = []
+                    for item in reversed(raw_data):
+                        candles.append({
+                            'time': int(item[0]),
+                            'o': float(item[1]),
+                            'h': float(item[2]),
+                            'l': float(item[3]),
+                            'c': float(item[4])
+                        })
+                    return candles
     except Exception as e:
         pass
     return []
 
-# --- التحقق من الاستراتيجيتين بناءً على تعديل حجم الجسم الأكبر من الذيول ---
+# --- التحقق من الاستراتيجيتين (حسب الشرط المعدل: الجسم أكبر من الذيول) ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -140,11 +159,10 @@ def evaluate_strategies(symbol, tf, candles):
         # الاستراتيجية الأولى
         try:
             if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
-                if cl1 < o1: # شمعة هابطة
+                if cl1 < o1:
                     body1 = abs(o1 - cl1)
                     upper_wick1 = h1 - max(o1, cl1)
                     lower_wick1 = min(o1, cl1) - l1
-                    # الشرط المحدث: حجم الجسم أكبر من الذيل العلوي وأكبر من الذيل السفلي فقط
                     if body1 > upper_wick1 and body1 > lower_wick1:
                         if cl2 < o2:
                             body2 = abs(o2 - cl2)
@@ -157,7 +175,7 @@ def evaluate_strategies(symbol, tf, candles):
                                             alert_key = f"{symbol}_{tf}_{c4['time']}_strat1"
                                             if alert_key not in sent_alerts:
                                                 sent_alerts[alert_key] = True
-                                                msg = f"💎 *تنبيه بينانس (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                                msg = f"💎 *تنبيه بايبت (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                                 send_telegram_message(msg)
                                                 print(f"🎯 [هدف] نموذج الاستراتيجية 1 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
                                                 sys.stdout.flush()
@@ -167,12 +185,11 @@ def evaluate_strategies(symbol, tf, candles):
 
         # الاستراتيجية الثانية
         try:
-            if cl1 < o1: # شمعة هابطة
+            if cl1 < o1:
                 body1 = abs(o1 - cl1)
                 u_wick1 = h1 - max(o1, cl1)
                 l_wick1 = min(o1, cl1) - l1
                 
-                # الشرط المحدث: جسم الشمعة أكبر من كلا الذيلين العلوي والسفلي
                 if body1 > u_wick1 and body1 > l_wick1:
                     if cl2 < o2:
                         body2 = abs(o2 - cl2)
@@ -183,7 +200,7 @@ def evaluate_strategies(symbol, tf, candles):
                                     alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
                                     if alert_key not in sent_alerts:
                                         sent_alerts[alert_key] = True
-                                        msg = f"🚀 *تنبيه بينانس (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                        msg = f"🚀 *تنبيه بايبت (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                         send_telegram_message(msg)
                                         print(f"🎯 [هدف] نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
                                         sys.stdout.flush()
@@ -195,9 +212,9 @@ def evaluate_strategies(symbol, tf, candles):
 
 # --- الدورة الرئيسية ---
 def main_loop():
-    print("🚀 [بدء التشغيل] تم تشغيل رادار بينانس الرئيسي...", flush=True)
+    print("🚀 [بدء التشغيل] تم تشغيل رادار بايبت الرئيسي...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بينانس بنجاح وبدء المراقبة الفورية.")
+    send_telegram_message("🟢 تم تشغيل رادار بايبت بنجاح وبدء المراقبة الفورية.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -207,7 +224,7 @@ def main_loop():
         current_time = datetime.now()
         
         if not symbols or (current_time - last_update_time >= timedelta(hours=5)):
-            print("🔄 [تحديث] جلب قائمة العملات الصاعدة...", flush=True)
+            print("🔄 [تحديث] جلب قائمة العملات الصاعدة من بايبت...", flush=True)
             sys.stdout.flush()
             symbols = get_top_futures_symbols(limit=200)
             last_update_time = current_time
@@ -229,7 +246,7 @@ def main_loop():
                 if candles:
                     evaluate_strategies(symbol, tf, candles)
                 
-                time.sleep(0.2)
+                time.sleep(0.15)
                 
         print("⏳ [استراحة] انتهاء الدورة الحالية، الانتقال للدورة التالية...", flush=True)
         sys.stdout.flush()
