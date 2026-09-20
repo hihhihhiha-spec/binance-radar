@@ -143,7 +143,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق من الاستراتيجيتين (الذيول موجودة، وحجم الجسم أكبر من كل ذيل) ---
+# --- التحقق من الاستراتيجيتين (الجسم أكبر من الذيول، والذيل السفلي أكبر من العلوي في الشموع الحمراء) ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -164,8 +164,11 @@ def evaluate_strategies(symbol, tf, candles):
                     upper_wick1 = h1 - max(o1, cl1)
                     lower_wick1 = min(o1, cl1) - l1
                     
-                    # شرط الذيول: يجب أن يكون للشموع ذيول فعلية وفي نفس الوقت الجسم أكبر من كل ذيل على حدة
-                    if upper_wick1 > 0 and lower_wick1 > 0 and body1 > upper_wick1 and body1 > lower_wick1:
+                    # الشروط الجديدة: الذيول موجودة، الجسم أكبر من كلا الذيلين، والذيل السفلي أكبر من العلوي
+                    if (upper_wick1 > 0 and lower_wick1 > 0 and 
+                        body1 > upper_wick1 and body1 > lower_wick1 and 
+                        lower_wick1 > upper_wick1):
+                        
                         if cl2 < o2:
                             body2 = abs(o2 - cl2)
                             if body2 < body1 and l2 < l1 and cl2 < l1:
@@ -192,8 +195,11 @@ def evaluate_strategies(symbol, tf, candles):
                 u_wick1 = h1 - max(o1, cl1)
                 l_wick1 = min(o1, cl1) - l1
                 
-                # شرط الذيول: يجب وجود ذيل علوي وسفلي، وحجم الجسم أكبر منهما
-                if u_wick1 > 0 and l_wick1 > 0 and body1 > u_wick1 and body1 > l_wick1:
+                # الشروط الجديدة: الذيول موجودة، الجسم أكبر من كلا الذيلين، والذيل السفلي أكبر من العلوي
+                if (u_wick1 > 0 and l_wick1 > 0 and 
+                    body1 > u_wick1 and body1 > l_wick1 and 
+                    l_wick1 > u_wick1):
+                    
                     if cl2 < o2:
                         body2 = abs(o2 - cl2)
                         if body2 > body1 and l2 < l1:
