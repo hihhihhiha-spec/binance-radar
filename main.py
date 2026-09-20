@@ -53,7 +53,7 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# --- جلب أعلى العملات من واجهة Spot الآمنة ضد الحظر (لضمان عمل جلب القائمة 100%) ---
+# --- جلب أعلى العملات من واجهة Spot الآمنة ضد الحظر ---
 def get_top_futures_symbols(limit=200):
     try:
         print("📡 [بينانس] جاري جلب قائمة العملات الصاعدة...", flush=True)
@@ -124,7 +124,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق من الاستراتيجيتين ---
+# --- التحقق من الاستراتيجيتين بناءً على تعديل حجم الجسم الأكبر من الذيول ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -140,11 +140,12 @@ def evaluate_strategies(symbol, tf, candles):
         # الاستراتيجية الأولى
         try:
             if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
-                if cl1 < o1:
+                if cl1 < o1: # شمعة هابطة
                     body1 = abs(o1 - cl1)
                     upper_wick1 = h1 - max(o1, cl1)
                     lower_wick1 = min(o1, cl1) - l1
-                    if body1 > upper_wick1 and body1 > lower_wick1 and upper_wick1 <= lower_wick1:
+                    # الشرط المحدث: حجم الجسم أكبر من الذيل العلوي وأكبر من الذيل السفلي فقط
+                    if body1 > upper_wick1 and body1 > lower_wick1:
                         if cl2 < o2:
                             body2 = abs(o2 - cl2)
                             if body2 < body1 and l2 < l1 and cl2 < l1:
@@ -166,11 +167,12 @@ def evaluate_strategies(symbol, tf, candles):
 
         # الاستراتيجية الثانية
         try:
-            if cl1 < o1:
+            if cl1 < o1: # شمعة هابطة
                 body1 = abs(o1 - cl1)
                 u_wick1 = h1 - max(o1, cl1)
                 l_wick1 = min(o1, cl1) - l1
                 
+                # الشرط المحدث: جسم الشمعة أكبر من كلا الذيلين العلوي والسفلي
                 if body1 > u_wick1 and body1 > l_wick1:
                     if cl2 < o2:
                         body2 = abs(o2 - cl2)
