@@ -28,7 +28,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Multi-Threaded Live Logging Radar is Active")
+        self.wfile.write(b"Sequential Strategies Cycle Radar is Active")
     def log_message(self, format, *args):
         pass
 
@@ -121,15 +121,32 @@ def get_wick_body(o, h, l, c):
     lower_wick = min(o, c) - l
     return body, upper_wick, lower_wick
 
-# --- مهام الاستراتيجيات المستقلة مع طباعة التتبع المباشر ---
+def main():
+    print("🟢 [بدء التشغيل] الرادار المتسلسل يعمل الآن...", flush=True)
+    send_telegram_message("🟢 تم تشغيل الرادار بنظام الدورات المتسلسلة للاستراتيجيات.")
 
-def run_strategy_1(symbols, timeframes):
-    print("🚀 [تشغيل] محرك الاستراتيجية الأولى بدأ المراقبة...", flush=True)
+    timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
+    symbols = []
+    last_update_time = datetime.min
+    cycle_counter = 1
+
     while True:
         try:
+            current_time = datetime.now()
+            
+            # تحديث قائمة العملات كل 3 ساعات
+            if not symbols or (current_time - last_update_time >= timedelta(hours=3)):
+                symbols = get_top_futures_symbols(limit=500)
+                last_update_time = current_time
+                if not symbols:
+                    time.sleep(30)
+                    continue
+
+            # ================= دَوْرَة الاستراتيجية الأولى =================
+            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الأولى على {len(symbols)} عملة...", flush=True)
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    print(f"🔍 [س1] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
+                    print(f"🔍 [دورة {cycle_counter} | س1] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
                     if candles and len(candles) >= 7:
                         c_prev2, c_prev1, c1, c2, c3, c4 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2], candles[-1]
@@ -156,20 +173,14 @@ def run_strategy_1(symbols, timeframes):
                                                         if key not in sent_alerts:
                                                             sent_alerts[key] = True
                                                             send_telegram_message(f"💎 *تنبيه (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                                                            print(f"🎯 [س 1 محقق] {symbol.upper()} - {tf}", flush=True)
+                                                            print(f"🎯 [هدف محقق - س1] {symbol.upper()} - {tf}", flush=True)
                     time.sleep(0.02)
-            time.sleep(10)
-        except Exception as e:
-            print(f"⚠️ خطأ في الاستراتيجية الأولى: {e}", flush=True)
-            time.sleep(15)
 
-def run_strategy_2(symbols, timeframes):
-    print("🚀 [تشغيل] محرك الاستراتيجية الثانية بدأ المراقبة...", flush=True)
-    while True:
-        try:
+            # ================= دَوْرَة الاستراتيجية الثانية =================
+            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الثانية على {len(symbols)} عملة...", flush=True)
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    print(f"🔍 [س2] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
+                    print(f"🔍 [دورة {cycle_counter} | س2] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
                     if candles and len(candles) >= 7:
                         c1, c2, c3, c4 = candles[-4], candles[-3], candles[-2], candles[-1]
@@ -193,20 +204,14 @@ def run_strategy_2(symbols, timeframes):
                                                 if key not in sent_alerts:
                                                     sent_alerts[key] = True
                                                     send_telegram_message(f"🚀 *تنبيه (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                                                    print(f"🎯 [س 2 محقق] {symbol.upper()} - {tf}", flush=True)
+                                                    print(f"🎯 [هدف محقق - س2] {symbol.upper()} - {tf}", flush=True)
                     time.sleep(0.02)
-            time.sleep(10)
-        except Exception as e:
-            print(f"⚠️ خطأ في الاستراتيجية الثانية: {e}", flush=True)
-            time.sleep(15)
 
-def run_strategy_3(symbols, timeframes):
-    print("🚀 [تشغيل] محرك الاستراتيجية الثالثة بدأ المراقبة...", flush=True)
-    while True:
-        try:
+            # ================= دَوْرَة الاستراتيجية الثالثة =================
+            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الثالثة على {len(symbols)} عملة...", flush=True)
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    print(f"🔍 [س3] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
+                    print(f"🔍 [دورة {cycle_counter} | س3] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
                     if candles and len(candles) >= 7:
                         c1, c2, c3 = candles[-4], candles[-3], candles[-2]
@@ -226,40 +231,16 @@ def run_strategy_3(symbols, timeframes):
                                                 if key not in sent_alerts:
                                                     sent_alerts[key] = True
                                                     send_telegram_message(f"⭐ *تنبيه (الاستراتيجية الثالثة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                                                    print(f"🎯 [س 3 محقق] {symbol.upper()} - {tf}", flush=True)
+                                                    print(f"🎯 [هدف محقق - س3] {symbol.upper()} - {tf}", flush=True)
                     time.sleep(0.02)
-            time.sleep(10)
+
+            print(f"\n✅ [اكتملت الدورة الكلية رقم {cycle_counter} بنجاح]\n" + "-"*50, flush=True)
+            cycle_counter += 1
+            time.sleep(5)
+
         except Exception as e:
-            print(f"⚠️ خطأ في الاستراتيجية الثالثة: {e}", flush=True)
-            time.sleep(15)
-
-def main():
-    print("🟢 [البدء الرئيسي] جاري إطلاق الرادار مع طباعة تفاصيل الفحص...", flush=True)
-    send_telegram_message("🟢 تم تشغيل الرادار مع تفعيل طباعة العملات قيد الفحص بالسجلات.")
-
-    timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
-    
-    symbols = get_top_futures_symbols(limit=500)
-    if not symbols:
-        symbols = ["btcusdt", "ethusdt"]
-
-    def update_symbols_periodically():
-        nonlocal symbols
-        while True:
-            time.sleep(10800)
-            new_symbols = get_top_futures_symbols(limit=500)
-            if new_symbols:
-                symbols = new_symbols
-
-    threading.Thread(target=update_symbols_periodically, daemon=True).start()
-
-    # تشغيل كل استراتيجية في مسار مستقل مع طباعة تتبع العملات
-    threading.Thread(target=run_strategy_1, args=(symbols, timeframes), daemon=True).start()
-    threading.Thread(target=run_strategy_2, args=(symbols, timeframes), daemon=True).start()
-    threading.Thread(target=run_strategy_3, args=(symbols, timeframes), daemon=True).start()
-
-    while True:
-        time.sleep(60)
+            print(f"⚠️ خطأ في الحلقة الرئيسية: {e}", flush=True)
+            time.sleep(10)
 
 if __name__ == "__main__":
     main()
