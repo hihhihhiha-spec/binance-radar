@@ -47,13 +47,11 @@ threading.Thread(target=run_http_server, daemon=True).start()
 
 sent_alerts = {}
 
-# هيدر متصفح حقيقي لتجنب أي حظر
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "application/json"
 }
 
-# --- جلب أعلى العملات صعوداً في الفيوتشرز من بايبت ---
 def get_top_futures_symbols(limit=200):
     try:
         print("📡 [بايبت] جاري جلب قائمة العملات الصاعدة (Linear Futures)...", flush=True)
@@ -63,19 +61,15 @@ def get_top_futures_symbols(limit=200):
         
         if response.status_code != 200:
             print(f"⚠️ خطأ في الاستجابة (الكود: {response.status_code})", flush=True)
-            sys.stdout.flush()
             return []
             
         result = response.json()
         if result.get("retCode") != 0:
             print(f"⚠️ خطأ من API بايبت: {result.get('retMsg')}", flush=True)
-            sys.stdout.flush()
             return []
             
         data = result.get("result", {}).get("list", [])
         if not isinstance(data, list):
-            print(f"⚠️ البيانات المستلمة ليست قائمة صحيحة", flush=True)
-            sys.stdout.flush()
             return []
         
         movers = []
@@ -104,10 +98,8 @@ def get_top_futures_symbols(limit=200):
         return top_symbols
     except Exception as e:
         print(f"❌ خطأ في جلب العملات من بايبت: {e}", flush=True)
-        sys.stdout.flush()
         return []
 
-# تحويل الفريمات لتتوافق مع معيار بايبت V5
 BYBIT_INTERVALS = {
     '1m': '1',
     '3m': '3',
@@ -118,7 +110,6 @@ BYBIT_INTERVALS = {
     '4h': '240'
 }
 
-# --- جلب الشموع التاريخية من بايبت ---
 def get_klines(symbol, interval, limit=15):
     try:
         bybit_tf = BYBIT_INTERVALS.get(interval, '60')
@@ -143,7 +134,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق من الاستراتيجيات الثلاث بشكل مستقل وبمعادلات دقيقة للديول ---
+# --- فحص الاستراتيجيات مع طباعة تقرير تشخيصي (Debug) لكل خطوة ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -156,14 +147,13 @@ def evaluate_strategies(symbol, tf, candles):
         o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
         o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
 
-        # ---------------- دالة حساب دقيقة للديول والأجسام ----------------
         def get_wick_body(o, h, l, c):
             body = abs(o - c)
             upper_wick = h - max(o, c)
             lower_wick = min(o, c) - l
             return body, upper_wick, lower_wick
 
-        # 1. الاستراتيجية الأولى
+        # --- فحص الاستراتيجية الأولى ---
         strat1_active = False
         try:
             if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
@@ -172,7 +162,6 @@ def evaluate_strategies(symbol, tf, candles):
                     if (upper_wick1 > 0 and lower_wick1 > 0 and 
                         body1 > upper_wick1 and body1 > lower_wick1 and 
                         lower_wick1 > upper_wick1):
-                        
                         if cl2 < o2:
                             body2, _, _ = get_wick_body(o2, h2, l2, cl2)
                             if body2 < body1 and l2 < l1 and cl2 < l1:
@@ -182,10 +171,10 @@ def evaluate_strategies(symbol, tf, candles):
                                         middle_c3 = (h3 + l3) / 2
                                         if cl4 > middle_c3:
                                             strat1_active = True
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"⚠️ [Debug S1 Error] {symbol} {tf}: {e}", flush=True)
 
-        # 2. الاستراتيجية الثانية
+        # --- فحص الاستراتيجية الثانية ---
         strat2_active = False
         try:
             if cl1 < o1:
@@ -193,7 +182,6 @@ def evaluate_strategies(symbol, tf, candles):
                 if (u_wick1 > 0 and l_wick1 > 0 and 
                     body1 > u_wick1 and body1 > l_wick1 and 
                     l_wick1 > u_wick1):
-                    
                     if cl2 < o2:
                         body2, _, _ = get_wick_body(o2, h2, l2, cl2)
                         if body2 > body1 and l2 < l1:
@@ -201,41 +189,35 @@ def evaluate_strategies(symbol, tf, candles):
                                 middle_c3 = (h3 + l3) / 2
                                 if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1) and (cl4 > middle_c3):
                                     strat2_active = True
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"⚠️ [Debug S2 Error] {symbol} {tf}: {e}", flush=True)
 
-        # 3. الاستراتيجية الثالثة الجديدة
-        # - شمعة حمراء أولى: حجمها أكبر من ذيلها السفلي، وذيلها السفلي أكبر من العلوي.
-        # - شمعة ثانية (مطرقة حمراء `c2`): حمراء، تكسر قاع الأولى وتغلق تحت ذيلها السفلي، مع ذيل سفلي (بدون قيود صارمة على طوله مقارنة بالجسم).
-        # - شمعة ثالثة (خضراء `c3`): تكسر المطرقة وتغلق فوقها، وتبقي بالكامل داخل نطاق الشمعة الحمراء الأولى (قمة وقاع وإغلاق وديول).
+        # --- فحص الاستراتيجية الثالثة ---
         strat3_active = False
         try:
             if cl1 < o1:
                 body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
-                # الشمعة الأولى: الجسم أكبر من الذيل السفلي، والذيل السفلي أكبر من العلوي
                 if body1 > l_wick1 and l_wick1 > u_wick1:
-                    # شمعة المطرقة الحمراء (c2)
                     if cl2 < o2:
                         body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-                        # شروط المطرقة الحمراء: تكسر قاع الأولى وتغلق تحت ذيلها السفلي
-                        # ذيل سفلي موجود (l_wick2 > 0) ولا يهم إن كان أكبر من الجسم أو العكس
                         if l2 < l1 and cl2 < (l1 - l_wick1) and l_wick2 > 0:
-                            # الشمعة الثالثة (c3): خضراء تكسر المطرقة وتغلق فوقها، وتبقى داخل نطاق الشمعة الأولى تماماً
                             if cl3 > o3:
                                 if (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2):
                                     strat3_active = True
-        except Exception:
-            pass
+                                else:
+                                    # طباعة سبب عدم اكتمال شرط الشمعة الثالثة للاستراتيجية الثالثة لغرض المراقبة
+                                    print(f"🔍 [تتبع S3] {symbol.upper()} ({tf}): الشمعة الثالثة لم تحقق نطاق الشمعة الأولى بدقة (l3 >= l1: {l3 >= l1}, h3 <= h1: {h3 <= h1})", flush=True)
+        except Exception as e:
+            print(f"⚠️ [Debug S3 Error] {symbol} {tf}: {e}", flush=True)
 
-        # ---------------- تنفيذ وإرسال التنبيهات المستقلة ----------------
+        # --- تنفيذ وإرسال التنبيهات ---
         if strat1_active:
             alert_key_1 = f"{symbol}_{tf}_{c4['time']}_strat1"
             if alert_key_1 not in sent_alerts:
                 sent_alerts[alert_key_1] = True
                 msg = f"💎 *تنبيه بايبت (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                 send_telegram_message(msg)
-                print(f"🎯 [هدف] نموذج الاستراتيجية 1 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
-                sys.stdout.flush()
+                print(f"🎯 [هدف محقق] الاستراتيجية 1 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
 
         if strat2_active:
             alert_key_2 = f"{symbol}_{tf}_{c4['time']}_strat2"
@@ -243,8 +225,7 @@ def evaluate_strategies(symbol, tf, candles):
                 sent_alerts[alert_key_2] = True
                 msg = f"🚀 *تنبيه بايبت (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                 send_telegram_message(msg)
-                print(f"🎯 [هدف] نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
-                sys.stdout.flush()
+                print(f"🎯 [هدف محقق] الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
 
         if strat3_active:
             alert_key_3 = f"{symbol}_{tf}_{c3['time']}_strat3"
@@ -252,17 +233,15 @@ def evaluate_strategies(symbol, tf, candles):
                 sent_alerts[alert_key_3] = True
                 msg = f"⭐ *تنبيه بايبت (الاستراتيجية الثالثة - المطرقة داخل النطاق)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                 send_telegram_message(msg)
-                print(f"🎯 [هدف] نموذج الاستراتيجية 3 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
-                sys.stdout.flush()
+                print(f"🎯 [هدف محقق] الاستراتيجية 3 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
 
     except Exception as e:
-        pass
+        print(f"❌ خطأ عام في تقييم الاستراتيجيات: {e}", flush=True)
 
-# --- الدورة الرئيسية ---
 def main_loop():
-    print("🚀 [بدء التشغيل] تم تشغيل رادار بايبت الرئيسي...", flush=True)
+    print("🚀 [بدء التشغيل] تم تشغيل رادار بايبت (وضع التتبع والتشخيص النشط)...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بايبت بنجاح وبدء المراقبة الفورية (3 استراتيجيات).")
+    send_telegram_message("🟢 تم تشغيل رادار بايبت (بوضع التشخيص الفوري).")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -278,7 +257,6 @@ def main_loop():
             last_update_time = current_time
             if not symbols:
                 print("⚠️ [تنبيه] فشل جلب العملات، إعادة المحاولة خلال دقيقة...", flush=True)
-                sys.stdout.flush()
                 time.sleep(60)
                 continue
 
@@ -287,14 +265,10 @@ def main_loop():
         
         for symbol in symbols:
             for tf in timeframes:
-                print(f"🔍 فحص العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
-                sys.stdout.flush()
-                
                 candles = get_klines(symbol, tf, limit=15)
                 if candles:
                     evaluate_strategies(symbol, tf, candles)
-                
-                time.sleep(0.15)
+                time.sleep(0.1)
                 
         print("⏳ [استراحة] انتهاء الدورة الحالية، الانتقال للدورة التالية...", flush=True)
         sys.stdout.flush()
