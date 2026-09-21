@@ -28,7 +28,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Multi-Threaded Independent Strategies Radar is Active")
+        self.wfile.write(b"Multi-Threaded Live Logging Radar is Active")
     def log_message(self, format, *args):
         pass
 
@@ -121,14 +121,15 @@ def get_wick_body(o, h, l, c):
     lower_wick = min(o, c) - l
     return body, upper_wick, lower_wick
 
-# --- مهام الاستراتيجيات المستقلة (كل استراتيجية تعمل على حدة) ---
+# --- مهام الاستراتيجيات المستقلة مع طباعة التتبع المباشر ---
 
 def run_strategy_1(symbols, timeframes):
-    print("🚀 [بدء تشغيل] محرك الاستراتيجية الأولى...", flush=True)
+    print("🚀 [تشغيل] محرك الاستراتيجية الأولى بدأ المراقبة...", flush=True)
     while True:
         try:
-            for symbol in symbols:
+            for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
+                    print(f"🔍 [س1] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
                     if candles and len(candles) >= 7:
                         c_prev2, c_prev1, c1, c2, c3, c4 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2], candles[-1]
@@ -163,11 +164,12 @@ def run_strategy_1(symbols, timeframes):
             time.sleep(15)
 
 def run_strategy_2(symbols, timeframes):
-    print("🚀 [بدء تشغيل] محرك الاستراتيجية الثانية...", flush=True)
+    print("🚀 [تشغيل] محرك الاستراتيجية الثانية بدأ المراقبة...", flush=True)
     while True:
         try:
-            for symbol in symbols:
+            for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
+                    print(f"🔍 [س2] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
                     if candles and len(candles) >= 7:
                         c1, c2, c3, c4 = candles[-4], candles[-3], candles[-2], candles[-1]
@@ -199,11 +201,12 @@ def run_strategy_2(symbols, timeframes):
             time.sleep(15)
 
 def run_strategy_3(symbols, timeframes):
-    print("🚀 [بدء التشغيل] محرك الاستراتيجية الثالثة...", flush=True)
+    print("🚀 [تشغيل] محرك الاستراتيجية الثالثة بدأ المراقبة...", flush=True)
     while True:
         try:
-            for symbol in symbols:
+            for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
+                    print(f"🔍 [س3] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
                     if candles and len(candles) >= 7:
                         c1, c2, c3 = candles[-4], candles[-3], candles[-2]
@@ -231,32 +234,30 @@ def run_strategy_3(symbols, timeframes):
             time.sleep(15)
 
 def main():
-    print("🟢 [البدء الرئيسي] جاري إطلاق رادار العملات المستقل...", flush=True)
-    send_telegram_message("🟢 تم تشغيل نظام الرادار متعدد المسارات (Multi-Threaded Strategies) بـ 500 عملة.")
+    print("🟢 [البدء الرئيسي] جاري إطلاق الرادار مع طباعة تفاصيل الفحص...", flush=True)
+    send_telegram_message("🟢 تم تشغيل الرادار مع تفعيل طباعة العملات قيد الفحص بالسجلات.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     
-    # جلب العملات لأول مرة وتحديثها كل 3 ساعات في الخلفية
     symbols = get_top_futures_symbols(limit=500)
     if not symbols:
-        symbols = ["btcusdt", "ethusdt"] # احتياطي
+        symbols = ["btcusdt", "ethusdt"]
 
     def update_symbols_periodically():
         nonlocal symbols
         while True:
-            time.sleep(10800) # كل 3 ساعات
+            time.sleep(10800)
             new_symbols = get_top_futures_symbols(limit=500)
             if new_symbols:
                 symbols = new_symbols
 
     threading.Thread(target=update_symbols_periodically, daemon=True).start()
 
-    # تشغيل كل استراتيجية في مسار (Thread) مستقل تماماً
+    # تشغيل كل استراتيجية في مسار مستقل مع طباعة تتبع العملات
     threading.Thread(target=run_strategy_1, args=(symbols, timeframes), daemon=True).start()
     threading.Thread(target=run_strategy_2, args=(symbols, timeframes), daemon=True).start()
     threading.Thread(target=run_strategy_3, args=(symbols, timeframes), daemon=True).start()
 
-    # الحفاظ على البرنامج الرئيسي حياً
     while True:
         time.sleep(60)
 
