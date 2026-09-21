@@ -28,7 +28,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Strict Strategies Radar is Active")
+        self.wfile.write(b"Strict Strategies Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -47,8 +47,8 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# --- جلب العملات الصاعدة من بايبت ---
-def get_top_futures_symbols(limit=350):
+# --- جلب أعلى 500 عملة صاعدة من بايبت ---
+def get_top_futures_symbols(limit=500):
     try:
         url = "https://api.bybit.com/v5/market/tickers?category=linear"
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -212,8 +212,8 @@ def evaluate_strategies(symbol, tf, candles):
         pass
 
 def main():
-    print("🚀 [بدء التشغيل] الرادار يعمل بكامل الشروط الصارمة...", flush=True)
-    send_telegram_message("🟢 الرادار يعمل الآن ويراقب الاستراتيجيات الثلاث بدقة صارمة.")
+    print("🚀 [بدء التشغيل] الرادار يعمل الآن لمراقبة 500 عملة...", flush=True)
+    send_telegram_message("🟢 تم تحديث الرادار لمراقبة أعلى 500 عملة في بايبت.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -225,7 +225,7 @@ def main():
             current_time = datetime.now()
             
             if not symbols or (current_time - last_update_time >= timedelta(hours=3)):
-                symbols = get_top_futures_symbols(limit=150)
+                symbols = get_top_futures_symbols(limit=500)
                 last_update_time = current_time
                 if not symbols:
                     time.sleep(30)
@@ -238,7 +238,7 @@ def main():
                     candles = get_klines(symbol, tf, limit=15)
                     if candles:
                         evaluate_strategies(symbol, tf, candles)
-                    time.sleep(0.06)
+                    time.sleep(0.04)  # تقليل الفاصل الزمني قليلاً لاستيعاب العدد الكبير
                     
             print(f"⏳ انتهت الدورة رقم {cycle_count} بنجاح.", flush=True)
             cycle_count += 1
