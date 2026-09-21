@@ -143,7 +143,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق من الاستراتيجيتين بشكل مستقل تماماً وبدون قطع المسار (Return) ---
+# --- التحقق من الاستراتيجيات الثلاث بشكل مستقل وبمعادلات دقيقة للديول ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -156,21 +156,25 @@ def evaluate_strategies(symbol, tf, candles):
         o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
         o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
 
-        # 1. حساب حالة الاستراتيجية الأولى في متغيّر خاص
+        # ---------------- دالة حساب دقيقة للديول والأجسام ----------------
+        def get_wick_body(o, h, l, c):
+            body = abs(o - c)
+            upper_wick = h - max(o, c)
+            lower_wick = min(o, c) - l
+            return body, upper_wick, lower_wick
+
+        # 1. الاستراتيجية الأولى
         strat1_active = False
         try:
             if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
-                if cl1 < o1: # شمعة هابطة
-                    body1 = abs(o1 - cl1)
-                    upper_wick1 = h1 - max(o1, cl1)
-                    lower_wick1 = min(o1, cl1) - l1
-                    
+                if cl1 < o1:
+                    body1, upper_wick1, lower_wick1 = get_wick_body(o1, h1, l1, cl1)
                     if (upper_wick1 > 0 and lower_wick1 > 0 and 
                         body1 > upper_wick1 and body1 > lower_wick1 and 
                         lower_wick1 > upper_wick1):
                         
                         if cl2 < o2:
-                            body2 = abs(o2 - cl2)
+                            body2, _, _ = get_wick_body(o2, h2, l2, cl2)
                             if body2 < body1 and l2 < l1 and cl2 < l1:
                                 if cl3 > o3 and l3 >= l2:
                                     middle_c1 = (h1 + l1) / 2
@@ -181,20 +185,17 @@ def evaluate_strategies(symbol, tf, candles):
         except Exception:
             pass
 
-        # 2. حساب حالة الاستراتيجية الثانية في متغيّر مستقل تماماً
+        # 2. الاستراتيجية الثانية
         strat2_active = False
         try:
-            if cl1 < o1: # شمعة هابطة
-                body1 = abs(o1 - cl1)
-                u_wick1 = h1 - max(o1, cl1)
-                l_wick1 = min(o1, cl1) - l1
-                
+            if cl1 < o1:
+                body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
                 if (u_wick1 > 0 and l_wick1 > 0 and 
                     body1 > u_wick1 and body1 > l_wick1 and 
                     l_wick1 > u_wick1):
                     
                     if cl2 < o2:
-                        body2 = abs(o2 - cl2)
+                        body2, _, _ = get_wick_body(o2, h2, l2, cl2)
                         if body2 > body1 and l2 < l1:
                             if cl3 > o3:
                                 middle_c3 = (h3 + l3) / 2
@@ -203,7 +204,30 @@ def evaluate_strategies(symbol, tf, candles):
         except Exception:
             pass
 
-        # 3. معالجة وتلفيذ التنبيهات بناءً على النتائج (بدون إيقاف الكود وبشكل منفصل)
+        # 3. الاستراتيجية الثالثة الجديدة
+        # - شمعة حمراء أولى: حجمها أكبر من ذيلها السفلي، وذيلها السفلي أكبر من العلوي.
+        # - شمعة ثانية (مطرقة حمراء `c2`): حمراء، تكسر قاع الأولى وتغلق تحت ذيلها السفلي، مع ذيل سفلي (بدون قيود صارمة على طوله مقارنة بالجسم).
+        # - شمعة ثالثة (خضراء `c3`): تكسر المطرقة وتغلق فوقها، وتبقي بالكامل داخل نطاق الشمعة الحمراء الأولى (قمة وقاع وإغلاق وديول).
+        strat3_active = False
+        try:
+            if cl1 < o1:
+                body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
+                # الشمعة الأولى: الجسم أكبر من الذيل السفلي، والذيل السفلي أكبر من العلوي
+                if body1 > l_wick1 and l_wick1 > u_wick1:
+                    # شمعة المطرقة الحمراء (c2)
+                    if cl2 < o2:
+                        body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
+                        # شروط المطرقة الحمراء: تكسر قاع الأولى وتغلق تحت ذيلها السفلي
+                        # ذيل سفلي موجود (l_wick2 > 0) ولا يهم إن كان أكبر من الجسم أو العكس
+                        if l2 < l1 and cl2 < (l1 - l_wick1) and l_wick2 > 0:
+                            # الشمعة الثالثة (c3): خضراء تكسر المطرقة وتغلق فوقها، وتبقى داخل نطاق الشمعة الأولى تماماً
+                            if cl3 > o3:
+                                if (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2):
+                                    strat3_active = True
+        except Exception:
+            pass
+
+        # ---------------- تنفيذ وإرسال التنبيهات المستقلة ----------------
         if strat1_active:
             alert_key_1 = f"{symbol}_{tf}_{c4['time']}_strat1"
             if alert_key_1 not in sent_alerts:
@@ -222,6 +246,15 @@ def evaluate_strategies(symbol, tf, candles):
                 print(f"🎯 [هدف] نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
                 sys.stdout.flush()
 
+        if strat3_active:
+            alert_key_3 = f"{symbol}_{tf}_{c3['time']}_strat3"
+            if alert_key_3 not in sent_alerts:
+                sent_alerts[alert_key_3] = True
+                msg = f"⭐ *تنبيه بايبت (الاستراتيجية الثالثة - المطرقة داخل النطاق)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                send_telegram_message(msg)
+                print(f"🎯 [هدف] نموذج الاستراتيجية 3 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                sys.stdout.flush()
+
     except Exception as e:
         pass
 
@@ -229,7 +262,7 @@ def evaluate_strategies(symbol, tf, candles):
 def main_loop():
     print("🚀 [بدء التشغيل] تم تشغيل رادار بايبت الرئيسي...", flush=True)
     sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بايبت بنجاح وبدء المراقبة الفورية.")
+    send_telegram_message("🟢 تم تشغيل رادار بايبت بنجاح وبدء المراقبة الفورية (3 استراتيجيات).")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
