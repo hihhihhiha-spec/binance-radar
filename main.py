@@ -19,89 +19,70 @@ def send_telegram_message(message):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}
         response = requests.post(url, json=payload, timeout=5)
-        print(f"📤 [تيليجرام] تم الإرسال بنجاح (الكود: {response.status_code})", flush=True)
+        print(f"📤 [تيليجرام] تم الإرسال (الكود: {response.status_code})", flush=True)
     except Exception as e:
         print(f"❌ Telegram Error: {e}", flush=True)
 
-# --- سيرفر HTTP أساسي لـ Render (يعمل فوراً لمنع تعليق In progress) ---
-class HealthCheckHandler(BaseHTTPRequestHandler):
+# --- سيرفر HTTP إجبار الاستجابة على Render ---
+class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bybit Radar is Running Successfully")
+        self.wfile.write(b"Bybit 3-Strategy Radar is Active")
     def log_message(self, format, *args):
         pass
 
-def run_http_server():
+def run_server():
     port = int(os.environ.get("PORT", 10000))
-    try:
-        server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-        print(f"🌐 [سيرفر Render] يعمل بنجاح على البورت {port}", flush=True)
-        sys.stdout.flush()
-        server.serve_forever()
-    except Exception as e:
-        print(f"❌ خطأ في تشغيل السيرفر: {e}", flush=True)
-        sys.stdout.flush()
+    print(f"🌐 [HTTP Server] يعمل على البورت {port}", flush=True)
+    server = HTTPServer(('0.0.0.0', port), SimpleHandler)
+    server.serve_forever()
 
-# تشغيل سيرفر الويب في خلفية مستقلة لضمان استجابة Render فوراً
-threading.Thread(target=run_http_server, daemon=True).start()
+threading.Thread(target=run_server, daemon=True).start()
 
 sent_alerts = {}
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (Chrome/122.0.0.0 Safari/537.36)",
     "Accept": "application/json"
 }
 
-def get_top_futures_symbols(limit=100):
+# --- جلب العملات الصاعدة من بايبت ---
+def get_top_futures_symbols(limit=150):
     try:
-        print("📡 [بايبت] جاري جلب قائمة العملات الصاعدة (Linear Futures)...", flush=True)
-        sys.stdout.flush()
         url = "https://api.bybit.com/v5/market/tickers?category=linear"
         response = requests.get(url, headers=HEADERS, timeout=10)
-        
-        if response.status_code != 200:
-            print(f"⚠️ خطأ في الاستجابة (الكود: {response.status_code})", flush=True)
-            return []
-            
-        result = response.json()
-        if result.get("retCode") != 0:
-            print(f"⚠️ خطأ من API بايبت: {result.get('retMsg')}", flush=True)
-            return []
-            
-        data = result.get("result", {}).get("list", [])
-        if not isinstance(data, list):
-            return []
-        
-        movers = []
-        for item in data:
-            symbol = item.get('symbol', '')
-            if symbol.endswith('USDT'):
-                try:
-                    pct = float(item.get('price24hPcnt', 0)) * 100
-                    movers.append((symbol.lower(), pct))
-                except ValueError:
-                    continue
-        
-        movers.sort(key=lambda x: x[1], reverse=True)
-        
-        seen = set()
-        top_symbols = []
-        for m in movers:
-            if m[0] not in seen:
-                seen.add(m[0])
-                top_symbols.append(m[0])
-            if len(top_symbols) >= limit:
-                break
-                
-        print(f"🔥 [نجاح] تم اختيار أعلى {len(top_symbols)} عملة من بايبت.", flush=True)
-        sys.stdout.flush()
-        return top_symbols
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("retCode") == 0:
+                data = result.get("result", {}).get("list", [])
+                movers = []
+                for item in data:
+                    symbol = item.get('symbol', '')
+                    if symbol.endswith('USDT'):
+                        try:
+                            pct = float(item.get('price24hPcnt', 0)) * 100
+                            movers.append((symbol.lower(), pct))
+                        except ValueError:
+                            continue
+                movers.sort(key=lambda x: x[1], reverse=True)
+                seen = set()
+                top_symbols = []
+                for m in movers:
+                    if m[0] not in seen:
+                        seen.add(m[0])
+                        top_symbols.append(m[0])
+                    if len(top_symbols) >= limit:
+                        break
+                return top_symbols
     except Exception as e:
-        print(f"❌ خطأ في جلب العملات من بايبت: {e}", flush=True)
-        return []
+        print(f"❌ خطأ جلب العملات: {e}", flush=True)
+    return []
 
 BYBIT_INTERVALS = {
+    '1m': '1',
+    '3m': '3',
+    '5m': '5',
     '15m': '15',
     '30m': '30',
     '1h': '60',
@@ -128,10 +109,11 @@ def get_klines(symbol, interval, limit=15):
                             'c': float(item[4])
                         })
                     return candles
-    except Exception as e:
+    except Exception:
         pass
     return []
 
+# --- معادلات حساب الديول والأجسام وحساب الاستراتيجيات الثلاث مستقلة ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -144,6 +126,7 @@ def evaluate_strategies(symbol, tf, candles):
         o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
         o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
 
+        # دالة رياضية محددة بدقة للحجم والديول
         def get_wick_body(o, h, l, c):
             body = abs(o - c)
             upper_wick = h - max(o, c)
@@ -189,7 +172,7 @@ def evaluate_strategies(symbol, tf, candles):
         except Exception:
             pass
 
-        # --- 3. الاستراتيجية الثالثة ---
+        # --- 3. الاستراتيجية الثالثة (المطرقة الحمراء المحصورة) ---
         strat3_active = False
         try:
             if cl1 < o1:
@@ -204,35 +187,36 @@ def evaluate_strategies(symbol, tf, candles):
         except Exception:
             pass
 
-        # --- إرسال التنبيهات ---
+        # --- إرسال الإشعارات المباشرة منفصلة دون إيقاف العملية ---
         if strat1_active:
             alert_key_1 = f"{symbol}_{tf}_{c4['time']}_strat1"
             if alert_key_1 not in sent_alerts:
                 sent_alerts[alert_key_1] = True
                 send_telegram_message(f"💎 *تنبيه بايبت (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                print(f"🎯 [هدف] استراتيجية 1: {symbol.upper()} - {tf}", flush=True)
 
         if strat2_active:
             alert_key_2 = f"{symbol}_{tf}_{c4['time']}_strat2"
             if alert_key_2 not in sent_alerts:
                 sent_alerts[alert_key_2] = True
                 send_telegram_message(f"🚀 *تنبيه بايبت (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                print(f"🎯 [هدف] استراتيجية 2: {symbol.upper()} - {tf}", flush=True)
 
         if strat3_active:
             alert_key_3 = f"{symbol}_{tf}_{c3['time']}_strat3"
             if alert_key_3 not in sent_alerts:
                 sent_alerts[alert_key_3] = True
                 send_telegram_message(f"⭐ *تنبيه بايبت (الاستراتيجية الثالثة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                print(f"🎯 [هدف] استراتيجية 3: {symbol.upper()} - {tf}", flush=True)
 
     except Exception:
         pass
 
-def main_loop():
-    print("🚀 [بدء التشغيل] الرادار يعمل الآن ويراقب السوق...", flush=True)
-    sys.stdout.flush()
-    send_telegram_message("🟢 تم تشغيل رادار بايبت بنجاح وتجاوز حالة الانتظار.")
+def main():
+    print("🚀 [بدء التشغيل] تم تفعيل الرادار الكامل مع الاستراتيجيات الثلاث...", flush=True)
+    send_telegram_message("🟢 تم تشغيل الرادار بالكامل (3 استراتيجيات) وبدء الفحص.")
 
-    # تقليص الفريمات والعملات قليلاً لضمان سرعة الدورة وعدم تعليق السيرفر
-    timeframes = ['15m', '30m', '1h', '4h']
+    timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
     last_update_time = datetime.min
 
@@ -241,26 +225,26 @@ def main_loop():
             current_time = datetime.now()
             
             if not symbols or (current_time - last_update_time >= timedelta(hours=3)):
-                symbols = get_top_futures_symbols(limit=100)
+                symbols = get_top_futures_symbols(limit=150)
                 last_update_time = current_time
                 if not symbols:
                     time.sleep(30)
                     continue
 
-            print(f"🔄 جاري فحص {len(symbols)} عملة...", flush=True)
-            sys.stdout.flush()
+            print(f"🔄 جاري فحص {len(symbols)} عملة على {len(timeframes)} فريمات...", flush=True)
             
             for symbol in symbols:
                 for tf in timeframes:
                     candles = get_klines(symbol, tf, limit=15)
                     if candles:
                         evaluate_strategies(symbol, tf, candles)
-                    time.sleep(0.05)
+                    time.sleep(0.08)
                     
+            print("⏳ انتهت دورة الفحص، بدء الدورة التالية...", flush=True)
             time.sleep(5)
         except Exception as e:
-            print(f"⚠️ خطأ في الدورة الرئيسية: {e}", flush=True)
+            print(f"⚠️ خطأ أثناء الفحص: {e}", flush=True)
             time.sleep(10)
 
 if __name__ == "__main__":
-    main_loop()
+    main()
