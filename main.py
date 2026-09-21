@@ -28,7 +28,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Strict Strategies Radar (500 Coins) is Active")
+        self.wfile.write(b"5 Strategies Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -113,7 +113,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- معادلات الحساب الدقيقة والتقييم المستقل للاستراتيجيات الثلاث ---
+# --- التقييم المستقل للاستراتيجيات الخمس ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -150,8 +150,8 @@ def evaluate_strategies(symbol, tf, candles):
                                         middle_c3 = (h3 + l3) / 2
                                         if cl4 > middle_c3:
                                             strat1_active = True
-        except Exception as e:
-            print(f"⚠️ S1 Error [{symbol}]: {e}", flush=True)
+        except Exception:
+            pass
 
         # --- 2. الاستراتيجية الثانية ---
         strat2_active = False
@@ -168,10 +168,10 @@ def evaluate_strategies(symbol, tf, candles):
                                 middle_c3 = (h3 + l3) / 2
                                 if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1) and (cl4 > middle_c3):
                                     strat2_active = True
-        except Exception as e:
-            print(f"⚠️ S2 Error [{symbol}]: {e}", flush=True)
+        except Exception:
+            pass
 
-        # --- 3. الاستراتيجية الثالثة (بشروطها الصارمة بالكامل) ---
+        # --- 3. الاستراتيجية الثالثة ---
         strat3_active = False
         try:
             if cl1 < o1:
@@ -183,37 +183,64 @@ def evaluate_strategies(symbol, tf, candles):
                             if cl3 > o3:
                                 if (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2):
                                     strat3_active = True
-        except Exception as e:
-            print(f"⚠️ S3 Error [{symbol}]: {e}", flush=True)
+        except Exception:
+            pass
 
-        # --- تنفيذ وإرسال التنبيهات المستقلة ---
+        # --- 4. الاستراتيجية الرابعة (الجديدة والسهلة: شمعة حمراء تليها شمعة خضراء انعكاسية) ---
+        strat4_active = False
+        try:
+            if cl3 < o3 and cl4 > o4:  # الشمعة قبل الأخيرة حمراء والأخيرة خضراء
+                strat4_active = True
+        except Exception:
+            pass
+
+        # --- 5. الاستراتيجية الخامسة (الجديدة والسهلة: شمعة خضراء تخترق قمة الشمعة السابقة) ---
+        strat5_active = False
+        try:
+            if cl4 > o4 and cl4 > h3:  # شمعة إغلاق خضراء حالية تتجاوز قمة الشمعة السابقة
+                strat5_active = True
+        except Exception:
+            pass
+
+        # --- إرسال الإشعارات المستقلة ---
         if strat1_active:
-            alert_key_1 = f"{symbol}_{tf}_{c4['time']}_strat1"
-            if alert_key_1 not in sent_alerts:
-                sent_alerts[alert_key_1] = True
-                send_telegram_message(f"💎 *تنبيه بايبت (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                print(f"🎯 [تنبيه مرسل] استراتيجية 1: {symbol.upper()} - {tf}", flush=True)
+            key = f"{symbol}_{tf}_{c4['time']}_s1"
+            if key not in sent_alerts:
+                sent_alerts[key] = True
+                send_telegram_message(f"💎 *تنبيه (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
 
         if strat2_active:
-            alert_key_2 = f"{symbol}_{tf}_{c4['time']}_strat2"
-            if alert_key_2 not in sent_alerts:
-                sent_alerts[alert_key_2] = True
-                send_telegram_message(f"🚀 *تنبيه بايبت (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                print(f"🎯 [تنبيه مرسل] استراتيجية 2: {symbol.upper()} - {tf}", flush=True)
+            key = f"{symbol}_{tf}_{c4['time']}_s2"
+            if key not in sent_alerts:
+                sent_alerts[key] = True
+                send_telegram_message(f"🚀 *تنبيه (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
 
         if strat3_active:
-            alert_key_3 = f"{symbol}_{tf}_{c3['time']}_strat3"
-            if alert_key_3 not in sent_alerts:
-                sent_alerts[alert_key_3] = True
-                send_telegram_message(f"⭐ *تنبيه بايبت (الاستراتيجية الثالثة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                print(f"🎯 [تنبيه مرسل] استراتيجية 3: {symbol.upper()} - {tf}", flush=True)
+            key = f"{symbol}_{tf}_{c3['time']}_s3"
+            if key not in sent_alerts:
+                sent_alerts[key] = True
+                send_telegram_message(f"⭐ *تنبيه (الاستراتيجية الثالثة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+
+        if strat4_active:
+            key = f"{symbol}_{tf}_{c4['time']}_s4"
+            if key not in sent_alerts:
+                sent_alerts[key] = True
+                send_telegram_message(f"🔹 *تنبيه تجريبي (الاستراتيجية الرابعة السهلة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                print(f"🎯 [هدف ساس 4] {symbol.upper()} - {tf}", flush=True)
+
+        if strat5_active:
+            key = f"{symbol}_{tf}_{c4['time']}_s5"
+            if key not in sent_alerts:
+                sent_alerts[key] = True
+                send_telegram_message(f"🔸 *تنبيه تجريبي (الاستراتيجية الخامسة السهلة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                print(f"🎯 [هدف ساس 5] {symbol.upper()}` - {tf}", flush=True)
 
     except Exception:
         pass
 
 def main():
-    print("🚀 [بدء التشغيل] الرادار يعمل الآن لمراقبة 500 عملة...", flush=True)
-    send_telegram_message("🟢 تم تحديث الرادار لمراقبة أعلى 500 عملة في بايبت.")
+    print("🚀 [بدء التشغيل] رادار الـ 5 استراتيجيات يعمل الآن...", flush=True)
+    send_telegram_message("🟢 تم تشغيل الرادار مع الاستراتيجيات الـ 5 للفحص التجريبي.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -238,7 +265,7 @@ def main():
                     candles = get_klines(symbol, tf, limit=15)
                     if candles:
                         evaluate_strategies(symbol, tf, candles)
-                    time.sleep(0.04)  # تقليل الفاصل الزمني قليلاً لاستيعاب العدد الكبير
+                    time.sleep(0.04)
                     
             print(f"⏳ انتهت الدورة رقم {cycle_count} بنجاح.", flush=True)
             cycle_count += 1
