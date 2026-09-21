@@ -143,7 +143,7 @@ def get_klines(symbol, interval, limit=15):
         pass
     return []
 
-# --- التحقق من الاستراتيجيتين (الجسم أكبر من الذيول، والذيل السفلي أكبر من العلوي في الشموع الحمراء) ---
+# --- التحقق من الاستراتيجيتين بشكل مستقل تماماً وبدون قطع المسار (Return) ---
 def evaluate_strategies(symbol, tf, candles):
     try:
         if len(candles) < 7:
@@ -156,7 +156,8 @@ def evaluate_strategies(symbol, tf, candles):
         o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
         o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
 
-        # الاستراتيجية الأولى
+        # 1. حساب حالة الاستراتيجية الأولى في متغيّر خاص
+        strat1_active = False
         try:
             if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
                 if cl1 < o1: # شمعة هابطة
@@ -164,7 +165,6 @@ def evaluate_strategies(symbol, tf, candles):
                     upper_wick1 = h1 - max(o1, cl1)
                     lower_wick1 = min(o1, cl1) - l1
                     
-                    # الشروط الجديدة: الذيول موجودة، الجسم أكبر من كلا الذيلين، والذيل السفلي أكبر من العلوي
                     if (upper_wick1 > 0 and lower_wick1 > 0 and 
                         body1 > upper_wick1 and body1 > lower_wick1 and 
                         lower_wick1 > upper_wick1):
@@ -177,25 +177,18 @@ def evaluate_strategies(symbol, tf, candles):
                                     if middle_c1 <= cl3 <= h1 and h3 <= h1:
                                         middle_c3 = (h3 + l3) / 2
                                         if cl4 > middle_c3:
-                                            alert_key = f"{symbol}_{tf}_{c4['time']}_strat1"
-                                            if alert_key not in sent_alerts:
-                                                sent_alerts[alert_key] = True
-                                                msg = f"💎 *تنبيه بايبت (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                                                send_telegram_message(msg)
-                                                print(f"🎯 [هدف] نموذج الاستراتيجية 1 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
-                                                sys.stdout.flush()
-                                                return
+                                            strat1_active = True
         except Exception:
             pass
 
-        # الاستراتيجية الثانية
+        # 2. حساب حالة الاستراتيجية الثانية في متغيّر مستقل تماماً
+        strat2_active = False
         try:
             if cl1 < o1: # شمعة هابطة
                 body1 = abs(o1 - cl1)
                 u_wick1 = h1 - max(o1, cl1)
                 l_wick1 = min(o1, cl1) - l1
                 
-                # الشروط الجديدة: الذيول موجودة، الجسم أكبر من كلا الذيلين، والذيل السفلي أكبر من العلوي
                 if (u_wick1 > 0 and l_wick1 > 0 and 
                     body1 > u_wick1 and body1 > l_wick1 and 
                     l_wick1 > u_wick1):
@@ -206,15 +199,28 @@ def evaluate_strategies(symbol, tf, candles):
                             if cl3 > o3:
                                 middle_c3 = (h3 + l3) / 2
                                 if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1) and (cl4 > middle_c3):
-                                    alert_key = f"{symbol}_{tf}_{c4['time']}_strat2"
-                                    if alert_key not in sent_alerts:
-                                        sent_alerts[alert_key] = True
-                                        msg = f"🚀 *تنبيه بايبت (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                                        send_telegram_message(msg)
-                                        print(f"🎯 [هدف] نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
-                                        sys.stdout.flush()
+                                    strat2_active = True
         except Exception:
             pass
+
+        # 3. معالجة وتلفيذ التنبيهات بناءً على النتائج (بدون إيقاف الكود وبشكل منفصل)
+        if strat1_active:
+            alert_key_1 = f"{symbol}_{tf}_{c4['time']}_strat1"
+            if alert_key_1 not in sent_alerts:
+                sent_alerts[alert_key_1] = True
+                msg = f"💎 *تنبيه بايبت (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                send_telegram_message(msg)
+                print(f"🎯 [هدف] نموذج الاستراتيجية 1 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                sys.stdout.flush()
+
+        if strat2_active:
+            alert_key_2 = f"{symbol}_{tf}_{c4['time']}_strat2"
+            if alert_key_2 not in sent_alerts:
+                sent_alerts[alert_key_2] = True
+                msg = f"🚀 *تنبيه بايبت (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                send_telegram_message(msg)
+                print(f"🎯 [هدف] نموذج الاستراتيجية 2 للعملة: {symbol.upper()} على فريم {tf}", flush=True)
+                sys.stdout.flush()
 
     except Exception as e:
         pass
