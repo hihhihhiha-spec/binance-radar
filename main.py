@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Precision Strategy Radar (500 Coins) is Active")
+        self.wfile.write(b"Multi-Strategy Crypto Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -93,9 +93,32 @@ def get_wick_body(o, h, l, c):
     lower_wick = min(o, c) - l
     return body, upper_wick, lower_wick
 
+# دالة الاستراتيجية الجديدة التي أرسلتها
+def check_custom_bullish_engulfing(open_p, high_p, low_p, close_p):
+    is_red_1 = close_p[2] < open_p[2]
+    body_1 = open_p[2] - close_p[2]
+    lower_wick_1 = close_p[2] - low_p[2]
+    upper_wick_1 = high_p[2] - open_p[2]
+    range_1 = high_p[2] - low_p[2]
+    
+    if range_1 == 0 or body_1 == 0:
+        return False
+
+    has_long_lower_wick = lower_wick_1 >= (1.2 * body_1)
+    has_small_upper_wick = upper_wick_1 <= (0.3 * body_1)
+    cond_candle_1 = is_red_1 and has_long_lower_wick and has_small_upper_wick
+
+    is_green_2 = close_p[1] > open_p[1]
+    body_2 = close_p[1] - open_p[1]
+    is_engulfing_body = body_2 >= (1.3 * body_1)
+    closed_above_red_open = close_p[1] >= open_p[2]
+    cond_candle_2 = is_green_2 and is_engulfing_body and closed_above_red_open
+
+    return cond_candle_1 and cond_candle_2
+
 def main():
-    print("🟢 [تشخيص بدقة النسبة المئوية - 500 عملة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير الدقيقة للديول العلوية لـ 500 عملة.")
+    print("🟢 [رادار الاستراتيجيتين المتقدم - 500 عملة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار المزدوج (الاستراتيجية الأولى + الاستراتيجية الجديدة) لـ 500 عملة.")
 
     timeframes = ['1m', '5m', '15m', '1h', '4h']
     symbols = []
@@ -112,7 +135,7 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة بالتفصيل الرقمي...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة للاستراتيجيتين...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
@@ -120,6 +143,13 @@ def main():
                     if not candles or len(candles) < 4:
                         continue
                     
+                    # تجهيز مصفوفات الأسعار للاستراتيجية الجديدة
+                    # الفهرس [2] هو الشمعة السابقة، والفهرس [1] هو الشمعة الحالية/التالية
+                    open_p = [0, candles[-3]['o'], candles[-4]['o']]
+                    high_p = [0, candles[-3]['h'], candles[-4]['h']]
+                    low_p = [0, candles[-3]['l'], candles[-4]['l']]
+                    close_p = [0, candles[-3]['c'], candles[-4]['c']]
+
                     c1, c2, c3 = candles[-4], candles[-3], candles[-2]
                     o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
                     o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
@@ -127,45 +157,39 @@ def main():
 
                     body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
                     body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-                    body3, u_wick3, l_wick3 = get_wick_body(o3, h3, l3, cl3)
 
-                    # طباعة رقمية تحليلية مفصلة لكل شمعة
-                    print(f"📊 [{symbol.upper()} | {tf}] تفحص القيم:", flush=True)
-                    print(f"   C1 -> O:{o1} H:{h1} L:{l1} C:{cl1} | Body:{body1:.4f} UW:{u_wick1:.4f} LW:{l_wick1:.4f}", flush=True)
-                    print(f"   C2 -> O:{o2} H:{h2} L:{l2} C:{cl2} | Body:{body2:.4f} UW:{u_wick2:.4f} LW:{l_wick2:.4f}", flush=True)
-                    print(f"   C3 -> O:{o3} H:{h3} L:{l3} C:{cl3} | Body:{body3:.4f} UW:{u_wick3:.4f} LW:{l_wick3:.4f}", flush=True)
-
-                    # 1. الشمعة الأولى: هابطة + ذيل علوي لا يتجاوز 10% من حجم جسمها (يمكنك تعديل النسبة حسب رغبتك)
+                    # -------------------------------------------------------------
+                    # 1. فحص الاستراتيجية الأولى (Strategy 3 المرنة)
+                    # -------------------------------------------------------------
                     max_c1_u_wick = body1 * 0.10
-                    if cl1 >= o1 or u_wick1 > max_c1_u_wick:
-                        print(f"   ❌ استبعاد: C1 إما ليست هابطة أو ذيلها العلوي تجاوز النسبة المسموحة", flush=True)
-                        continue
-
-                    # 2. الشمعة الثانية (المطرقة الحمراء المرنة): حمراء + ذيل علوي لا يتجاوز 5% من جسمها، والإغلاق داخل أو خارج الأولى عادي
                     max_c2_u_wick = body2 * 0.05
-                    if not (cl2 < o2 and u_wick2 <= max_c2_u_wick):
-                        print(f"   ❌ استبعاد: شروط C2 غير مطابقة", flush=True)
-                        continue
+                    
+                    is_strategy_1_valid = (
+                        cl1 < o1 and u_wick1 <= max_c1_u_wick and
+                        cl2 < o2 and u_wick2 <= max_c2_u_wick and
+                        cl3 > o3 and (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
+                    )
 
-                    print(f"   💡 [تم اجتياز C1 و C2 بنجاح!] فحص الشمعة الثالثة...", flush=True)
+                    if is_strategy_1_valid:
+                        key1 = f"{symbol}_{tf}_{c3['time']}_strat1"
+                        if key1 not in sent_alerts:
+                            sent_alerts[key1] = True
+                            msg = f"⭐ *تنبيه (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            send_telegram_message(msg)
+                            print(f"🚨 [إشارة الاستراتيجية 1] تم إرسال تنبيه لـ {symbol.upper()} - {tf}", flush=True)
 
-                    # 3. الشمعة الثالثة: صاعدة ومحققة لشروط الاختراق والنطاق
-                    if cl3 <= o3:
-                        print(f"   ❌ استبعاد: C3 ليست صاعدة", flush=True)
-                        continue
+                    # -------------------------------------------------------------
+                    # 2. فحص الاستراتيجية الجديدة (Custom Bullish Engulfing)
+                    # -------------------------------------------------------------
+                    is_strategy_new_valid = check_custom_bullish_engulfing(open_p, high_p, low_p, close_p)
 
-                    trailing_condition = (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
-                    if not trailing_condition:
-                        print(f"   ❌ استبعاد: شرط التتبع أو الاختراق لـ C3 غير محقق", flush=True)
-                        continue
-
-                    # نجاح تام
-                    key = f"{symbol}_{tf}_{c3['time']}_strict_uwicks_v3"
-                    if key not in sent_alerts:
-                        sent_alerts[key] = True
-                        msg = f"⭐ *تنبيه مطبق بدقة الديول*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                        send_telegram_message(msg)
-                        print(f"🚨 [إشارة صحيحة ومؤكدة!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
+                    if is_strategy_new_valid:
+                        key_new = f"{symbol}_{tf}_{candles[-3]['time']}_strat_new"
+                        if key_new not in sent_alerts:
+                            sent_alerts[key_new] = True
+                            msg = f"🚀 *تنبيه (الاستراتيجية الجديدة - ابلاع بشمعة ذات ذيل سفلي)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            send_telegram_message(msg)
+                            print(f"🚨 [إشارة الاستراتيجية الجديدة] تم إرسال تنبيه لـ {symbol.upper()} - {tf}", flush=True)
 
                     time.sleep(0.01)
 
