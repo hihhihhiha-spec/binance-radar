@@ -28,7 +28,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Debug Tracing Strategy 3 Radar is Active")
+        self.wfile.write(b"Multi-Strategy Sequential Radar (200 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -111,8 +111,8 @@ def get_klines(symbol, interval, limit=15):
                             'c': float(item[4])
                         })
                     return candles
-    except Exception as e:
-        print(f"⚠️ خطأ جلب شموع {symbol.upper()} على الفريم {interval}: {e}", flush=True)
+    except Exception:
+        pass
     return []
 
 def get_wick_body(o, h, l, c):
@@ -122,8 +122,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [بدء التشغيل] رادار التتبع التصحيحي يعمل الآن...", flush=True)
-    send_telegram_message("🟢 تم تشغيل رادار التتبع لمعرفة أين تفحص الشروط بدقة.")
+    print("🟢 [بدء التشغيل] رادار الاستراتيجيات المتعددة (200 عملة) يعمل الآن...", flush=True)
+    send_telegram_message("🟢 تم تشغيل رادار الاستراتيجيات المتعددة (الأولى، الثانية، والثالثة) لـ 200 عملة.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -139,75 +139,115 @@ def main():
                 symbols = get_top_futures_symbols(limit=200)
                 last_update_time = current_time
                 if not symbols:
-                    print("⚠️ قائمة العملات فارغة، إعادة المحاولة بعد 30 ثانية...", flush=True)
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [بدء الدورة رقم {cycle_counter}] فحص إجمالي {len(symbols)} عملة...", flush=True)
-            
+            # ================= دَوْرَة الاستراتيجية الأولى =================
+            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الأولى على {len(symbols)} عملة...", flush=True)
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    # سطر التتبع المباشر لتحديد أين يعمل الرادار لحظياً
-                    print(f"🔍 [دورة {idx+1}/{len(symbols)}] فحص العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
-                    
+                    print(f"🔍 [دورة {cycle_counter} | س1] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
-                    if not candles or len(candles) < 7:
-                        continue # تخطي إذا البيانات غير كافية
-                        
-                    c1, c2, c3 = candles[-4], candles[-3], candles[-2]
-                    o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
-                    o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
-                    o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
+                    if candles and len(candles) >= 7:
+                        c_prev2, c_prev1, c1, c2, c3, c4 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2], candles[-1]
+                        o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
+                        o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
+                        o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
+                        o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
 
-                    # --- تتبع الشروط خطوة بخطوة لمعرفة أين تسقط العملة ---
-                    
-                    # 1. شرط الشمعة الأولى
-                    if cl1 >= o1:
-                        continue # سقطت لأنها ليست هابطة
-                        
-                    body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
-                    if not (body1 > l_wick1 and l_wick1 > u_wick1):
-                        continue # سقطت عند تفاصيل ديول الشمعة الأولى
-                        
-                    # 2. شرط الشمعة الثانية (المطرقة الحمراء الصارمة)
-                    body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-                    
-                    # طباعة تتبع إذا اجتازت الشمعة الأولى واقتربت من التحقق
-                    # (هذا السطر سيطبع في السجلات إذا وجدت عملة تطابق الشمعة الأولى والثانية لتكتشف هل المشكلة في الشمعة الثالثة)
-                    if cl2 < o2 and l2 < l1:
-                        print(f"💡 [تتبع متقدم] {symbol.upper()} على {tf} اجتازت الشمعة الأولى والثانية جزئياً. فحص الشمعة الثالثة...", flush=True)
-
-                    if not (cl2 < o2 and u_wick2 == 0 and l2 < l1 and 
-                            cl2 < (l1 - l_wick1) and 
-                            (body2 >= l_wick2 or l_wick2 >= body2)):
-                        continue # سقطت عند شروط الشمعة الثانية (المطرقة الحمراء أو كسر الذيل)
-
-                    # 3. شرط الشمعة الثالثة (التتبع والصعود)
-                    if cl3 <= o3:
-                        print(f"⚠️ [تتبع] {symbol.upper()} على {tf} وصلت للشمعة الثالثة لكنها ليست صاعدة.", flush=True)
-                        continue
-
-                    trailing_condition = (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
-                    if not trailing_condition:
-                        print(f"⚠️ [تتبع] {symbol.upper()} على {tf} وصلت للشمعة الثالثة ولم تحقق شرط التتبع أو الاختراق.", flush=True)
-                        continue
-
-                    # إذا وصلت إلى هنا، فهذا يعني أن النموذج قد تحقق بنجاح 100%!
-                    key = f"{symbol}_{tf}_{c3['time']}_debug_s3"
-                    if key not in sent_alerts:
-                        sent_alerts[key] = True
-                        msg = f"⭐ *تنبيه (الاستراتيجية الثالثة - مطابقة كاملة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                        send_telegram_message(msg)
-                        print(f"🎯 [هدف محقق بنجاح!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
-
+                        if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
+                            if cl1 < o1:
+                                body1, upper_wick1, lower_wick1 = get_wick_body(o1, h1, l1, cl1)
+                                if (upper_wick1 > 0 and lower_wick1 > 0 and 
+                                    body1 > upper_wick1 and body1 > lower_wick1 and 
+                                    lower_wick1 > upper_wick1):
+                                    if cl2 < o2:
+                                        body2, _, _ = get_wick_body(o2, h2, l2, cl2)
+                                        if body2 < body1 and l2 < l1 and cl2 < l1:
+                                            if cl3 > o3 and l3 >= l2:
+                                                middle_c1 = (h1 + l1) / 2
+                                                if middle_c1 <= cl3 <= h1 and h3 <= h1:
+                                                    middle_c3 = (h3 + l3) / 2
+                                                    if cl4 > middle_c3:
+                                                        key = f"{symbol}_{tf}_{c4['time']}_s1"
+                                                        if key not in sent_alerts:
+                                                            sent_alerts[key] = True
+                                                            send_telegram_message(f"💎 *تنبيه (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                                                            print(f"🎯 [هدف محقق - س1] {symbol.upper()} - {tf}", flush=True)
                     time.sleep(0.02)
 
-            print(f"\n✅ [اكتملت الدورة رقم {cycle_counter} تماماً]\n" + "="*50, flush=True)
+            # ================= دَوْرَة الاستراتيجية الثانية =================
+            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الثانية على {len(symbols)} عملة...", flush=True)
+            for idx, symbol in enumerate(symbols):
+                for tf in timeframes:
+                    print(f"🔍 [دورة {cycle_counter} | س2] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
+                    candles = get_klines(symbol, tf, limit=15)
+                    if candles and len(candles) >= 7:
+                        c1, c2, c3, c4 = candles[-4], candles[-3], candles[-2], candles[-1]
+                        o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
+                        o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
+                        o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
+                        o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
+
+                        if cl1 < o1:
+                            body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
+                            if (u_wick1 > 0 and l_wick1 > 0 and 
+                                body1 > u_wick1 and body1 > l_wick1 and 
+                                l_wick1 > u_wick1):
+                                if cl2 < o2:
+                                    body2, _, _ = get_wick_body(o2, h2, l2, cl2)
+                                    if body2 > body1 and l2 < l1:
+                                        if cl3 > o3:
+                                            middle_c3 = (h3 + l3) / 2
+                                            if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1) and (cl4 > middle_c3):
+                                                key = f"{symbol}_{tf}_{c4['time']}_s2"
+                                                if key not in sent_alerts:
+                                                    sent_alerts[key] = True
+                                                    send_telegram_message(f"🚀 *تنبيه (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                                                    print(f"🎯 [هدف محقق - س2] {symbol.upper()} - {tf}", flush=True)
+                    time.sleep(0.02)
+
+            # ================= دَوْرَة الاستراتيجية الثالثة (الصارمة مع المطرقة الحمراء) =================
+            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الثالثة على {len(symbols)} عملة...", flush=True)
+            for idx, symbol in enumerate(symbols):
+                for tf in timeframes:
+                    print(f"🔍 [دورة {cycle_counter} | س3] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
+                    candles = get_klines(symbol, tf, limit=15)
+                    if candles and len(candles) >= 7:
+                        c1, c2, c3 = candles[-4], candles[-3], candles[-2]
+                        o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
+                        o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
+                        o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
+
+                        # 1. الشمعة الأولى
+                        if cl1 < o1:
+                            body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
+                            if body1 > l_wick1 and l_wick1 > u_wick1:
+                                
+                                # 2. الشمعة الثانية (مطرقة حمراء صارمة)
+                                body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
+                                if cl2 < o2 and u_wick2 == 0 and l2 < l1 and cl2 < (l1 - l_wick1) and (body2 >= l_wick2 or l_wick2 >= body2):
+                                    
+                                    # طباعة تتبع إذا اجتازت الشمعة الأولى والثانية
+                                    print(f"💡 [تتبع متقدم - س3] {symbol.upper()} على {tf} اجتازت الشمعة الأولى والثانية. فحص الثالثة...", flush=True)
+
+                                    # 3. الشمعة الثالثة
+                                    if cl3 > o3:
+                                        trailing_condition = (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
+                                        if trailing_condition:
+                                            key = f"{symbol}_{tf}_{c3['time']}_strict_s3"
+                                            if key not in sent_alerts:
+                                                sent_alerts[key] = True
+                                                send_telegram_message(f"⭐ *تنبيه (الاستراتيجية الثالثة الصارمة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                                                print(f"🎯 [هدف محقق - س3] {symbol.upper()} - {tf}", flush=True)
+                    time.sleep(0.02)
+
+            print(f"\n✅ [اكتملت الدورة الكلية رقم {cycle_counter} بنجاح]\n" + "-"*50, flush=True)
             cycle_counter += 1
             time.sleep(5)
 
         except Exception as e:
-            print(f"❌ [خطأ رئيسي في السطر أو الحلقة]: {e}", flush=True)
+            print(f"⚠️ خطأ في الحلقة الرئيسية: {e}", flush=True)
             time.sleep(10)
 
 if __name__ == "__main__":
