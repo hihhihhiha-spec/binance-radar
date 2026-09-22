@@ -95,7 +95,7 @@ def get_wick_body(o, h, l, c):
 
 def main():
     print("🟢 [تشخيص بدقة النسبة المئوية - 500 عملة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير المعدلة (الشمعة الأولى تتجاوز 5% وفريم 30m) لـ 500 عملة.")
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير المعدلة (ديول الشمعة الأولى والثانية) لـ 500 عملة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -141,10 +141,11 @@ def main():
                         print(f"   ❌ استبعاد: C1 إما ليست هابطة أو ذيلها العلوي لا يتجاوز 5%", flush=True)
                         continue
 
-                    # 2. الشمعة الثانية: حمراء + ذيل علوي لا يتجاوز 5% من جسمها
+                    # 2. الشمعة الثانية: حمراء + ذيل علوي لا يتجاوز 5% + ذيل سفلي أكبر من 5% من جسمها
                     max_c2_u_wick = body2 * 0.05
-                    if not (cl2 < o2 and u_wick2 <= max_c2_u_wick):
-                        print(f"   ❌ استبعاد: شروط C2 غير مطابقة", flush=True)
+                    min_c2_l_wick = body2 * 0.05
+                    if not (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick):
+                        print(f"   ❌ استبعاد: شروط C2 غير مطابقة (الذيل العلوي أو السفلي)", flush=True)
                         continue
 
                     print(f"   💡 [تم اجتياز C1 و C2 بنجاح!] فحص الشمعة الثالثة...", flush=True)
@@ -160,7 +161,7 @@ def main():
                         continue
 
                     # نجاح تام
-                    key = f"{symbol}_{tf}_{c3['time']}_strict_uwicks_v4"
+                    key = f"{symbol}_{tf}_{c3['time']}_strict_uwicks_v5"
                     if key not in sent_alerts:
                         sent_alerts[key] = True
                         msg = f"⭐ *تنبيه مطبق بدقة الديول*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
