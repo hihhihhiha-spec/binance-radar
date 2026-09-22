@@ -28,7 +28,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Sequential Strategies Cycle Radar is Active")
+        self.wfile.write(b"Strict Strategy 3 Radar (200 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -47,10 +47,10 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# --- جلب أعلى 500 عملة صاعدة من بايبت ---
-def get_top_futures_symbols(limit=500):
+# --- جلب أعلى 200 عملة صاعدة من بايبت ---
+def get_top_futures_symbols(limit=200):
     try:
-        print("📡 [بايبت] جاري جلب قائمة أعلى العملات (Linear Futures)...", flush=True)
+        print("📡 [بايبت] جاري جلب قائمة أعلى 200 عملة (Linear Futures)...", flush=True)
         url = "https://api.bybit.com/v5/market/tickers?category=linear"
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
@@ -122,8 +122,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [بدء التشغيل] الرادار المتسلسل يعمل الآن...", flush=True)
-    send_telegram_message("🟢 تم تشغيل الرادار بنظام الدورات المتسلسلة للاستراتيجيات.")
+    print("🟢 [بدء التشغيل] رادار الاستراتيجية الثالثة الصارم (200 عملة) يعمل الآن...", flush=True)
+    send_telegram_message("🟢 تم تشغيل رادار الاستراتيجية الثالثة الصارم لـ 200 عملة عبر جميع الفريمات.")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -136,82 +136,17 @@ def main():
             
             # تحديث قائمة العملات كل 3 ساعات
             if not symbols or (current_time - last_update_time >= timedelta(hours=3)):
-                symbols = get_top_futures_symbols(limit=500)
+                symbols = get_top_futures_symbols(limit=200)
                 last_update_time = current_time
                 if not symbols:
                     time.sleep(30)
                     continue
 
-            # ================= دَوْرَة الاستراتيجية الأولى =================
-            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الأولى على {len(symbols)} عملة...", flush=True)
+            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الثالثة الصارمة على {len(symbols)} عملة...", flush=True)
+            
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    print(f"🔍 [دورة {cycle_counter} | س1] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
-                    candles = get_klines(symbol, tf, limit=15)
-                    if candles and len(candles) >= 7:
-                        c_prev2, c_prev1, c1, c2, c3, c4 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2], candles[-1]
-                        o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
-                        o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
-                        o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
-                        o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
-
-                        if (c_prev2['h'] >= c_prev1['h'] and c_prev1['h'] >= h1):
-                            if cl1 < o1:
-                                body1, upper_wick1, lower_wick1 = get_wick_body(o1, h1, l1, cl1)
-                                if (upper_wick1 > 0 and lower_wick1 > 0 and 
-                                    body1 > upper_wick1 and body1 > lower_wick1 and 
-                                    lower_wick1 > upper_wick1):
-                                    if cl2 < o2:
-                                        body2, _, _ = get_wick_body(o2, h2, l2, cl2)
-                                        if body2 < body1 and l2 < l1 and cl2 < l1:
-                                            if cl3 > o3 and l3 >= l2:
-                                                middle_c1 = (h1 + l1) / 2
-                                                if middle_c1 <= cl3 <= h1 and h3 <= h1:
-                                                    middle_c3 = (h3 + l3) / 2
-                                                    if cl4 > middle_c3:
-                                                        key = f"{symbol}_{tf}_{c4['time']}_s1"
-                                                        if key not in sent_alerts:
-                                                            sent_alerts[key] = True
-                                                            send_telegram_message(f"💎 *تنبيه (الاستراتيجية الأولى)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                                                            print(f"🎯 [هدف محقق - س1] {symbol.upper()} - {tf}", flush=True)
-                    time.sleep(0.02)
-
-            # ================= دَوْرَة الاستراتيجية الثانية =================
-            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الثانية على {len(symbols)} عملة...", flush=True)
-            for idx, symbol in enumerate(symbols):
-                for tf in timeframes:
-                    print(f"🔍 [دورة {cycle_counter} | س2] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
-                    candles = get_klines(symbol, tf, limit=15)
-                    if candles and len(candles) >= 7:
-                        c1, c2, c3, c4 = candles[-4], candles[-3], candles[-2], candles[-1]
-                        o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
-                        o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
-                        o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
-                        o4, h4, l4, cl4 = c4['o'], c4['h'], c4['l'], c4['c']
-
-                        if cl1 < o1:
-                            body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
-                            if (u_wick1 > 0 and l_wick1 > 0 and 
-                                body1 > u_wick1 and body1 > l_wick1 and 
-                                l_wick1 > u_wick1):
-                                if cl2 < o2:
-                                    body2, _, _ = get_wick_body(o2, h2, l2, cl2)
-                                    if body2 > body1 and l2 < l1:
-                                        if cl3 > o3:
-                                            middle_c3 = (h3 + l3) / 2
-                                            if (l3 >= l1 and h3 <= h1) and (l4 >= l1 and h4 <= h1) and (cl4 > middle_c3):
-                                                key = f"{symbol}_{tf}_{c4['time']}_s2"
-                                                if key not in sent_alerts:
-                                                    sent_alerts[key] = True
-                                                    send_telegram_message(f"🚀 *تنبيه (الاستراتيجية الثانية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                                                    print(f"🎯 [هدف محقق - س2] {symbol.upper()} - {tf}", flush=True)
-                    time.sleep(0.02)
-
-            # ================= دَوْرَة الاستراتيجية الثالثة =================
-            print(f"\n🔄 [الدورة رقم {cycle_counter}] ➔ البدء بفحص الاستراتيجية الثالثة على {len(symbols)} عملة...", flush=True)
-            for idx, symbol in enumerate(symbols):
-                for tf in timeframes:
-                    print(f"🔍 [دورة {cycle_counter} | س3] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
+                    print(f"🔍 [دورة {cycle_counter}] فحص ({idx+1}/{len(symbols)}): {symbol.upper()} | الفريم: {tf}", flush=True)
                     candles = get_klines(symbol, tf, limit=15)
                     if candles and len(candles) >= 7:
                         c1, c2, c3 = candles[-4], candles[-3], candles[-2]
@@ -219,22 +154,29 @@ def main():
                         o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
                         o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
 
+                        # --- شروط الاستراتيجية الثالثة الصارمة ---
+                        # الشمعة الأولى: هابطة ولها ذيل سفلي
                         if cl1 < o1:
                             body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
                             if body1 > l_wick1 and l_wick1 > u_wick1:
-                                if cl2 < o2:
-                                    _, _, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-                                    if l2 < l1 and cl2 < (l1 - l_wick1) and l_wick2 > 0:
-                                        if cl3 > o3:
-                                            if (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2):
-                                                key = f"{symbol}_{tf}_{c3['time']}_s3"
-                                                if key not in sent_alerts:
-                                                    sent_alerts[key] = True
-                                                    send_telegram_message(f"⭐ *تنبيه (الاستراتيجية الثالثة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
-                                                    print(f"🎯 [هدف محقق - س3] {symbol.upper()} - {tf}", flush=True)
+                                
+                                # الشمعة الثانية: هابطة، مطرقة بدون ذيل علوي (u_wick2 == 0)، وتغلق تحت ذيل الأولى بوضوح
+                                body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
+                                if (cl2 < o2 and u_wick2 == 0 and l2 < l1 and 
+                                    cl2 < (l1 - l_wick1) and 
+                                    (body2 >= l_wick2 or l_wick2 >= body2)): # قبول الحالتين للذيل والحجم بكل مرونة وصارمة
+                                    
+                                    # الشمعة الثالثة: صاعدة تؤكد الانعكاس وتخترق قمة الثانية
+                                    if cl3 > o3:
+                                        if (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2):
+                                            key = f"{symbol}_{tf}_{c3['time']}_strict_s3"
+                                            if key not in sent_alerts:
+                                                sent_alerts[key] = True
+                                                send_telegram_message(f"⭐ *تنبيه (الاستراتيجية الثالثة الصارمة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                                                print(f"🎯 [هدف محقق - الاستراتيجية الثالثة] {symbol.upper()} - {tf}", flush=True)
                     time.sleep(0.02)
 
-            print(f"\n✅ [اكتملت الدورة الكلية رقم {cycle_counter} بنجاح]\n" + "-"*50, flush=True)
+            print(f"\n✅ [اكتملت الدورة رقم {cycle_counter} بنجاح]\n" + "-"*50, flush=True)
             cycle_counter += 1
             time.sleep(5)
 
