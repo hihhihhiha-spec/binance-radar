@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Detailed Diagnostic Strategy 3 Radar (500 Coins) is Active")
+        self.wfile.write(b"Fully Flexible Red Hammer Strategy Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -39,7 +39,6 @@ threading.Thread(target=run_server, daemon=True).start()
 sent_alerts = {}
 HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 
-# --- تم رفع الحد إلى 500 عملة ---
 def get_top_futures_symbols(limit=500):
     try:
         url = "https://api.bybit.com/v5/market/tickers?category=linear"
@@ -95,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [تشخيص رقمي تفصيلي - 500 عملة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل رادار التشخيص الرقمي البحت لـ 500 عملة.")
+    print("🟢 [تشخيص مرن كلياً - 500 عملة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار المرن كلياً (الإغلاق داخل أو خارج عادي) لـ 500 عملة.")
 
     timeframes = ['1m', '5m', '15m', '1h', '4h']
     symbols = []
@@ -130,13 +129,13 @@ def main():
                     body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
                     body3, u_wick3, l_wick3 = get_wick_body(o3, h3, l3, cl3)
 
-                    # طباعة رقمية تحليلية مفصلة لكل شمعة يتم فحصها للوقوف على القيم بدقة
+                    # طباعة رقمية تحليلية مفصلة لكل شمعة
                     print(f"📊 [{symbol.upper()} | {tf}] تفحص القيم:", flush=True)
                     print(f"   C1 -> O:{o1} H:{h1} L:{l1} C:{cl1} | Body:{body1:.4f} UW:{u_wick1:.4f} LW:{l_wick1:.4f}", flush=True)
                     print(f"   C2 -> O:{o2} H:{h2} L:{l2} C:{cl2} | Body:{body2:.4f} UW:{u_wick2:.4f} LW:{l_wick2:.4f}", flush=True)
                     print(f"   C3 -> O:{o3} H:{h3} L:{l3} C:{cl3} | Body:{body3:.4f} UW:{u_wick3:.4f} LW:{l_wick3:.4f}", flush=True)
 
-                    # 1. فحص الشمعة الأولى
+                    # 1. فحص الشمعة الأولى (هابطة وذاتها ديول محددة)
                     if cl1 >= o1:
                         print(f"   ❌ استبعاد: C1 ليست هابطة", flush=True)
                         continue
@@ -144,15 +143,15 @@ def main():
                         print(f"   ❌ استبعاد: شروط ديول وحجم C1 غير مطابقة", flush=True)
                         continue
 
-                    # 2. فحص الشمعة الثانية
+                    # 2. فحص الشمعة الثانية (المطرقة الحمراء: إغلاق أحمر + ذيل علوي شبه منعدم، مع السماح بالإغلاق سواء داخل أو خارج الأولى بحرية)
                     max_allowed_u_wick = body2 * 0.05
-                    if not (cl2 < o2 and u_wick2 <= max_allowed_u_wick and l2 < l1 and cl2 < (l1 - l_wick1)):
-                        print(f"   ❌ استبعاد: شروط C2 (المطرقة الحمراء والكسر) غير مطابقة", flush=True)
+                    if not (cl2 < o2 and u_wick2 <= max_allowed_u_wick):
+                        print(f"   ❌ استبعاد: شروط C2 (المطرقة الحمراء والإغلاق الأحمر) غير مطابقة", flush=True)
                         continue
 
                     print(f"   💡 [تم اجتياز C1 و C2 بنجاح!] فحص الشمعة الثالثة...", flush=True)
 
-                    # 3. فحص الشمعة الثالثة
+                    # 3. فحص الشمعة الثالثة (صاعدة ومحققة لشروط التتبع والاختراق)
                     if cl3 <= o3:
                         print(f"   ❌ استبعاد: C3 ليست صاعدة", flush=True)
                         continue
@@ -163,10 +162,10 @@ def main():
                         continue
 
                     # نجاح تام
-                    key = f"{symbol}_{tf}_{c3['time']}_500coins_diag"
+                    key = f"{symbol}_{tf}_{c3['time']}_fully_flexible_hammer"
                     if key not in sent_alerts:
                         sent_alerts[key] = True
-                        msg = f"⭐ *تنبيه مطابق بالكامل (500 عملة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                        msg = f"⭐ *تنبيه مطابق (مطرقة حمراء مرنة كلياً)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                         send_telegram_message(msg)
                         print(f"🚨 [إشارة صحيحة ومؤكدة!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
