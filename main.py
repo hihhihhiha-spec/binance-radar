@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Detailed Diagnostic Strategy 3 Radar is Active")
+        self.wfile.write(b"Detailed Diagnostic Strategy 3 Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -39,7 +39,8 @@ threading.Thread(target=run_server, daemon=True).start()
 sent_alerts = {}
 HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 
-def get_top_futures_symbols(limit=200):
+# --- تم رفع الحد إلى 500 عملة ---
+def get_top_futures_symbols(limit=500):
     try:
         url = "https://api.bybit.com/v5/market/tickers?category=linear"
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -55,7 +56,9 @@ def get_top_futures_symbols(limit=200):
                     except:
                         continue
             movers.sort(key=lambda x: x[1], reverse=True)
-            return [m[0] for m in movers[:limit]]
+            top_symbols = [m[0] for m in movers[:limit]]
+            print(f"🔥 [نجاح] تم جلب واعتماد {len(top_symbols)} عملة للفحص.", flush=True)
+            return top_symbols
     except Exception as e:
         print(f"❌ خطأ جلب العملات: {e}", flush=True)
     return []
@@ -92,8 +95,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [تشخيص رقمي تفصيلي] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل رادار التشخيص الرقمي البحت للشموع.")
+    print("🟢 [تشخيص رقمي تفصيلي - 500 عملة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل رادار التشخيص الرقمي البحت لـ 500 عملة.")
 
     timeframes = ['1m', '5m', '15m', '1h', '4h']
     symbols = []
@@ -104,7 +107,7 @@ def main():
         try:
             current_time = datetime.now()
             if not symbols or (current_time - last_update_time >= timedelta(hours=3)):
-                symbols = get_top_futures_symbols(limit=200)
+                symbols = get_top_futures_symbols(limit=500)
                 last_update_time = current_time
                 if not symbols:
                     time.sleep(30)
@@ -160,16 +163,16 @@ def main():
                         continue
 
                     # نجاح تام
-                    key = f"{symbol}_{tf}_{c3['time']}_detailed_diag"
+                    key = f"{symbol}_{tf}_{c3['time']}_500coins_diag"
                     if key not in sent_alerts:
                         sent_alerts[key] = True
-                        msg = f"⭐ *تنبيه مطابق بالكامل*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                        msg = f"⭐ *تنبيه مطابق بالكامل (500 عملة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                         send_telegram_message(msg)
                         print(f"🚨 [إشارة صحيحة ومؤكدة!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
                     time.sleep(0.01)
 
-            print(f"✅ اكتملت الدورة رقم {cycle}", flush=True)
+            print(f"✅ اكتملت الدورة رقم {cycle} لـ 500 عملة", flush=True)
             cycle += 1
             time.sleep(5)
 
