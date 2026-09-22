@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Strict & Realistic Strategy 3 Radar is Active")
+        self.wfile.write(b"Detailed Diagnostic Strategy 3 Radar is Active")
     def log_message(self, format, *args):
         pass
 
@@ -92,8 +92,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار واقعي صارم] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير الواقعية الصارمة.")
+    print("🟢 [تشخيص رقمي تفصيلي] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل رادار التشخيص الرقمي البحت للشموع.")
 
     timeframes = ['1m', '5m', '15m', '1h', '4h']
     symbols = []
@@ -110,7 +110,7 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة بالتفصيل الرقمي...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
@@ -123,37 +123,49 @@ def main():
                     o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
                     o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
 
-                    # 1. الشمعة الأولى: هابطة ولها ذيل سفلي
-                    if cl1 >= o1:
-                        continue
                     body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
-                    if not (body1 > l_wick1 and l_wick1 > u_wick1):
-                        continue
-
-                    # 2. الشمعة الثانية: مطرقة حمراء (ذيل علوي شبه منعدم < 5% من الجسم، وإغلاق تحت ذيل الأولى)
                     body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-                    
-                    # السماح بذيل علوي ميكروسكوبي لا يتجاوز 5% من الجسم لكي لا تضيع الفرص الحقيقية
-                    max_allowed_u_wick = body2 * 0.05
-                    
-                    if not (cl2 < o2 and u_wick2 <= max_allowed_u_wick and l2 < l1 and cl2 < (l1 - l_wick1)):
+                    body3, u_wick3, l_wick3 = get_wick_body(o3, h3, l3, cl3)
+
+                    # طباعة رقمية تحليلية مفصلة لكل شمعة يتم فحصها للوقوف على القيم بدقة
+                    print(f"📊 [{symbol.upper()} | {tf}] تفحص القيم:", flush=True)
+                    print(f"   C1 -> O:{o1} H:{h1} L:{l1} C:{cl1} | Body:{body1:.4f} UW:{u_wick1:.4f} LW:{l_wick1:.4f}", flush=True)
+                    print(f"   C2 -> O:{o2} H:{h2} L:{l2} C:{cl2} | Body:{body2:.4f} UW:{u_wick2:.4f} LW:{l_wick2:.4f}", flush=True)
+                    print(f"   C3 -> O:{o3} H:{h3} L:{l3} C:{cl3} | Body:{body3:.4f} UW:{u_wick3:.4f} LW:{l_wick3:.4f}", flush=True)
+
+                    # 1. فحص الشمعة الأولى
+                    if cl1 >= o1:
+                        print(f"   ❌ استبعاد: C1 ليست هابطة", flush=True)
+                        continue
+                    if not (body1 > l_wick1 and l_wick1 > u_wick1):
+                        print(f"   ❌ استبعاد: شروط ديول وحجم C1 غير مطابقة", flush=True)
                         continue
 
-                    # 3. الشمعة الثالثة: صاعدة ومؤكدة ضمن النطاق
+                    # 2. فحص الشمعة الثانية
+                    max_allowed_u_wick = body2 * 0.05
+                    if not (cl2 < o2 and u_wick2 <= max_allowed_u_wick and l2 < l1 and cl2 < (l1 - l_wick1)):
+                        print(f"   ❌ استبعاد: شروط C2 (المطرقة الحمراء والكسر) غير مطابقة", flush=True)
+                        continue
+
+                    print(f"   💡 [تم اجتياز C1 و C2 بنجاح!] فحص الشمعة الثالثة...", flush=True)
+
+                    # 3. فحص الشمعة الثالثة
                     if cl3 <= o3:
+                        print(f"   ❌ استبعاد: C3 ليست صاعدة", flush=True)
                         continue
 
                     trailing_condition = (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
                     if not trailing_condition:
+                        print(f"   ❌ استبعاد: شرط التتبع أو الاختراق لـ C3 غير محقق", flush=True)
                         continue
 
-                    # تطابق كامل وصارم
-                    key = f"{symbol}_{tf}_{c3['time']}_realistic_s3"
+                    # نجاح تام
+                    key = f"{symbol}_{tf}_{c3['time']}_detailed_diag"
                     if key not in sent_alerts:
                         sent_alerts[key] = True
-                        msg = f"⭐ *تنبيه مؤكد (الاستراتيجية الثالثة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                        msg = f"⭐ *تنبيه مطابق بالكامل*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                         send_telegram_message(msg)
-                        print(f"🎯 [إشارة مطابقة تماماً!] {symbol.upper()} - {tf}", flush=True)
+                        print(f"🚨 [إشارة صحيحة ومؤكدة!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
                     time.sleep(0.01)
 
