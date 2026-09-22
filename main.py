@@ -7,7 +7,7 @@ import requests
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- تفعيل الطباعة الفورية لكي تظهر السجلات مباشرة ---
+# --- تفعيل الطباعة الفورية ---
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
 TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Exact Strategy Radar (500 Coins) with Full Printing is Active")
+        self.wfile.write(b"Precision Strategy Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -93,38 +93,11 @@ def get_wick_body(o, h, l, c):
     lower_wick = min(o, c) - l
     return body, upper_wick, lower_wick
 
-# دالة استراتيجية الشموع الأربعة الجديدة التي طلبتها تماماً
-def check_four_candles_pattern(open_p, high_p, low_p, close_p):
-    # 1. الشمعة الأولى [4]: حمراء هابطة
-    is_red_1 = close_p[4] < open_p[4]
-    
-    # 2. الشمعة الثانية [3]: حمراء ذات ذيل سفلي طويل جداً (Pin Bar)
-    is_red_2 = close_p[3] < open_p[3]
-    body_2 = open_p[3] - close_p[3]
-    lower_wick_2 = close_p[3] - low_p[3]
-    upper_wick_2 = high_p[3] - open_p[3]
-    
-    if body_2 <= 0: return False
-    
-    has_long_lower_wick = (lower_wick_2 >= 1.2 * body_2) and (lower_wick_2 > upper_wick_2)
-
-    # 3. الشمعة الثالثة [2]: خضراء ابتلاعية صاعدة وقوية
-    is_green_3 = close_p[2] > open_p[2]
-    body_3 = close_p[2] - open_p[2]
-    engulfs_previous = (close_p[2] > open_p[3]) and (body_3 > body_2)
-
-    # 4. الشمعة الرابعة [1]: خضراء صغيرة أعلى الشمعة الابتلاعية
-    is_green_4 = close_p[1] > open_p[1]
-    body_4 = close_p[1] - open_p[1]
-    holds_above = close_p[1] > (open_p[2] + 0.5 * body_3)
-
-    return is_red_1 and (is_red_2 and has_long_lower_wick) and (is_green_3 and engulfs_previous) and (is_green_4 and holds_above)
-
 def main():
-    print("🟢 [رادار الاستراتيجيتين مع التشخيص الرقمي - 500 عملة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار مع استراتيجية الشموع الأربعة الجديدة لـ 500 عملة.")
+    print("🟢 [تشخيص بدقة النسبة المئوية - 500 عملة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير المعدلة (الشمعة الأولى تتجاوز 5% وفريم 30m) لـ 500 عملة.")
 
-    timeframes = ['1m', '5m', '15m', '1h', '4h']
+    timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
     last_update_time = datetime.min
     cycle = 1
@@ -139,21 +112,14 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة بالتفصيل والطباعة...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة بالتفصيل الرقمي...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
                     candles = get_klines(symbol, tf, limit=10)
-                    if not candles or len(candles) < 5:
+                    if not candles or len(candles) < 4:
                         continue
                     
-                    # تجهيز قوائم الأسعار لاستراتيجية الشموع الأربعة (فهرس 1 إلى 4)
-                    open_p = [0, candles[-2]['o'], candles[-3]['o'], candles[-4]['o'], candles[-5]['o']]
-                    high_p = [0, candles[-2]['h'], candles[-3]['h'], candles[-4]['h'], candles[-5]['h']]
-                    low_p = [0, candles[-2]['l'], candles[-3]['l'], candles[-4]['l'], candles[-5]['l']]
-                    close_p = [0, candles[-2]['c'], candles[-3]['c'], candles[-4]['c'], candles[-5]['c']]
-
-                    # تجهيز الشموع للاستراتيجية الأولى القديمة
                     c1, c2, c3 = candles[-4], candles[-3], candles[-2]
                     o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
                     o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
@@ -161,45 +127,45 @@ def main():
 
                     body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
                     body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
+                    body3, u_wick3, l_wick3 = get_wick_body(o3, h3, l3, cl3)
 
-                    # طباعة تشخيصية رقمية تفصيلية لكل شمعة لتراها في السجلات
-                    print(f"📊 [{symbol.upper()} | {tf}] فحص القيم:", flush=True)
+                    # طباعة رقمية تحليلية مفصلة لكل شمعة
+                    print(f"📊 [{symbol.upper()} | {tf}] تفحص القيم:", flush=True)
                     print(f"   C1 -> O:{o1} H:{h1} L:{l1} C:{cl1} | Body:{body1:.4f} UW:{u_wick1:.4f} LW:{l_wick1:.4f}", flush=True)
                     print(f"   C2 -> O:{o2} H:{h2} L:{l2} C:{cl2} | Body:{body2:.4f} UW:{u_wick2:.4f} LW:{l_wick2:.4f}", flush=True)
-                    print(f"   C3 -> O:{o3} H:{h3} L:{l3} C:{cl3}", flush=True)
+                    print(f"   C3 -> O:{o3} H:{h3} L:{l3} C:{cl3} | Body:{body3:.4f} UW:{u_wick3:.4f} LW:{l_wick3:.4f}", flush=True)
 
-                    # ==========================================
-                    # 1. فحص الاستراتيجية الأولى (القديمة بالديول المرنة)
-                    # ==========================================
-                    max_c1_u_wick = body1 * 0.10
+                    # 1. الشمعة الأولى: هابطة + ذيلها العلوي يجب أن يتجاوز 5% من حجم جسمها
+                    min_c1_u_wick = body1 * 0.05
+                    if cl1 >= o1 or u_wick1 <= min_c1_u_wick:
+                        print(f"   ❌ استبعاد: C1 إما ليست هابطة أو ذيلها العلوي لا يتجاوز 5%", flush=True)
+                        continue
+
+                    # 2. الشمعة الثانية: حمراء + ذيل علوي لا يتجاوز 5% من جسمها
                     max_c2_u_wick = body2 * 0.05
-                    
-                    is_strategy_1_valid = (
-                        cl1 < o1 and u_wick1 <= max_c1_u_wick and
-                        cl2 < o2 and u_wick2 <= max_c2_u_wick and
-                        cl3 > o3 and (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
-                    )
+                    if not (cl2 < o2 and u_wick2 <= max_c2_u_wick):
+                        print(f"   ❌ استبعاد: شروط C2 غير مطابقة", flush=True)
+                        continue
 
-                    if is_strategy_1_valid:
-                        key1 = f"{symbol}_{tf}_{c3['time']}_strat1"
-                        if key1 not in sent_alerts:
-                            sent_alerts[key1] = True
-                            msg = f"⭐ *تنبيه (الاستراتيجية الأولى القديمة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                            send_telegram_message(msg)
-                            print(f"🚨 [إشارة الاستراتيجية 1] تم إرسال تنبيه لـ {symbol.upper()} - {tf}", flush=True)
+                    print(f"   💡 [تم اجتياز C1 و C2 بنجاح!] فحص الشمعة الثالثة...", flush=True)
 
-                    # ==========================================
-                    # 2. فحص استراتيجية الشموع الأربعة الجديدة
-                    # ==========================================
-                    is_four_candles_valid = check_four_candles_pattern(open_p, high_p, low_p, close_p)
+                    # 3. الشمعة الثالثة: صاعدة ومحققة لشروط الاختراق والنطاق
+                    if cl3 <= o3:
+                        print(f"   ❌ استبعاد: C3 ليست صاعدة", flush=True)
+                        continue
 
-                    if is_four_candles_valid:
-                        key_four = f"{symbol}_{tf}_{candles[-2]['time']}_four_candles"
-                        if key_four not in sent_alerts:
-                            sent_alerts[key_four] = True
-                            msg = f"🚀 *تنبيه (استراتيجية الشموع الأربعة الجديدة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                            send_telegram_message(msg)
-                            print(f"🚨 [إشارة الشموع الأربعة الجديدة] تم إرسال تنبيه لـ {symbol.upper()} - {tf}", flush=True)
+                    trailing_condition = (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
+                    if not trailing_condition:
+                        print(f"   ❌ استبعاد: شرط التتبع أو الاختراق لـ C3 غير محقق", flush=True)
+                        continue
+
+                    # نجاح تام
+                    key = f"{symbol}_{tf}_{c3['time']}_strict_uwicks_v4"
+                    if key not in sent_alerts:
+                        sent_alerts[key] = True
+                        msg = f"⭐ *تنبيه مطبق بدقة الديول*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                        send_telegram_message(msg)
+                        print(f"🚨 [إشارة صحيحة ومؤكدة!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
                     time.sleep(0.01)
 
