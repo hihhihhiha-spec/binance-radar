@@ -118,39 +118,32 @@ def main():
                     if not candles or len(candles) < 4:
                         continue
                     
-                    # نأخذ آخر 3 شموع مكتملة تماماً (نتجنب الشمعة الحالية غير المغلقة [-1] ونأخذ [-4, -3, -2])
                     c1, c2, c3 = candles[-4], candles[-3], candles[-2]
                     o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
                     o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
                     o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
 
-                    # فحص الشمعة الأولى
                     if cl1 >= o1:
                         continue
                     body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
                     if not (body1 > l_wick1 and l_wick1 > u_wick1):
                         continue
 
-                    # فحص الشمعة الثانية (المطرقة الحمراء)
                     body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
                     
-                    # إذا وصلت العملة إلى هنا، فهذا يعني أن الشمعة الأولى والثانية انطبقت تماماً!
-                    # سنقوم بطباعة رسالة واضحة جداً في السجلات لترى العملة والفريم والأسعار
-                    print(🎯 [ايجاد محتمل] العملة {symbol.upper()} على فريم {tf} اجتازت الشمعة 1 و 2 بنجاح! فحص الشمعة 3..., flush=True)
-                    print(   -> C1: O={o1}, H={h1}, L={l1}, C={cl1}, LW={l_wick1}, UW={u_wick1}, Body={body1}, flush=True)
-                    print(   -> C2: O={o2}, H={h2}, L={l2}, C={cl2}, LW={l_wick2}, UW={u_wick2}, Body={body2}, flush=True)
+                    print(f"🎯 [ايجاد محتمل] العملة {symbol.upper()} على فريم {tf} اجتازت الشمعة 1 و 2 بنجاح! فحص الشمعة 3...", flush=True)
+                    print(f"   -> C1: O={o1}, H={h1}, L={l1}, C={cl1}, LW={l_wick1}, UW={u_wick1}, Body={body1}", flush=True)
+                    print(f"   -> C2: O={o2}, H={h2}, L={l2}, C={cl2}, LW={l_wick2}, UW={u_wick2}, Body={body2}", flush=True)
 
-                    # فحص الشمعة الثالثة
                     if cl3 <= o3:
-                        print(❌ [فشل الشمعة 3] الشمعة الثالثة ليست صاعدة (C={cl3} <= O={o3}), flush=True)
+                        print(f"❌ [فشل الشمعة 3] الشمعة الثالثة ليست صاعدة (C={cl3} <= O={o3})", flush=True)
                         continue
 
                     trailing_condition = (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
                     if not trailing_condition:
-                        print(❌ [فشل الشروط] الشمعة الثالثة خالفت شرط النطاق أو الاختراق., flush=True)
+                        print("❌ [فشل الشروط] الشمعة الثالثة خالفت شرط النطاق أو الاختراق.", flush=True)
                         continue
 
-                    # تحقق كامل
                     key = f"{symbol}_{tf}_{c3['time']}_diag_s3"
                     if key not in sent_alerts:
                         sent_alerts[key] = True
