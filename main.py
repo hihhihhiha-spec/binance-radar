@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Realistic Flexible Strategy Radar (500 Coins) is Active")
+        self.wfile.write(b"Precision Strategy Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [تشخيص واقعي مرن - 500 عملة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير الواقعية المرنة للديول لـ 500 عملة.")
+    print("🟢 [تشخيص بدقة النسبة المئوية - 500 عملة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير الدقيقة للديول العلوية لـ 500 عملة.")
 
     timeframes = ['1m', '5m', '15m', '1h', '4h']
     symbols = []
@@ -135,14 +135,15 @@ def main():
                     print(f"   C2 -> O:{o2} H:{h2} L:{l2} C:{cl2} | Body:{body2:.4f} UW:{u_wick2:.4f} LW:{l_wick2:.4f}", flush=True)
                     print(f"   C3 -> O:{o3} H:{h3} L:{l3} C:{cl3} | Body:{body3:.4f} UW:{u_wick3:.4f} LW:{l_wick3:.4f}", flush=True)
 
-                    # 1. الشمعة الأولى: هابطة فقط (مع السماح بأن يكون ذيلها العلوي منعدماً)
-                    if cl1 >= o1:
-                        print(f"   ❌ استبعاد: C1 ليست هابطة", flush=True)
+                    # 1. الشمعة الأولى: هابطة + ذيل علوي لا يتجاوز 10% من حجم جسمها (يمكنك تعديل النسبة حسب رغبتك)
+                    max_c1_u_wick = body1 * 0.10
+                    if cl1 >= o1 or u_wick1 > max_c1_u_wick:
+                        print(f"   ❌ استبعاد: C1 إما ليست هابطة أو ذيلها العلوي تجاوز النسبة المسموحة", flush=True)
                         continue
 
-                    # 2. الشمعة الثانية (المطرقة الحمراء المرنة): حمراء، ومسموح أن تكون بدون ذيل علوي نهائياً أو ذيل ضئيل، وتغلق داخل أو خارج الأولى بحرية
-                    max_allowed_u_wick = body2 * 0.05
-                    if not (cl2 < o2 and u_wick2 <= max_allowed_u_wick):
+                    # 2. الشمعة الثانية (المطرقة الحمراء المرنة): حمراء + ذيل علوي لا يتجاوز 5% من جسمها، والإغلاق داخل أو خارج الأولى عادي
+                    max_c2_u_wick = body2 * 0.05
+                    if not (cl2 < o2 and u_wick2 <= max_c2_u_wick):
                         print(f"   ❌ استبعاد: شروط C2 غير مطابقة", flush=True)
                         continue
 
@@ -159,10 +160,10 @@ def main():
                         continue
 
                     # نجاح تام
-                    key = f"{symbol}_{tf}_{c3['time']}_realistic_flexible_v2"
+                    key = f"{symbol}_{tf}_{c3['time']}_strict_uwicks_v3"
                     if key not in sent_alerts:
                         sent_alerts[key] = True
-                        msg = f"⭐ *تنبيه مطابق (واقعي مرن)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                        msg = f"⭐ *تنبيه مطبق بدقة الديول*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                         send_telegram_message(msg)
                         print(f"🚨 [إشارة صحيحة ومؤكدة!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
