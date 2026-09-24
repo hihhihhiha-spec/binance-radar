@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar with Full Trace is Active")
+        self.wfile.write(b"Dual Strategy Radar with Full Live Print is Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين مع تتبع الاستبعاد] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار مع تتبع أسباب الاستبعاد لـ 500 عملة.")
+    print("🟢 [رادار الاستراتيجيتين - طباعة حية وتتبع الاستبعاد مفعل] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار مع طباعة الفحص وأسباب الاستبعاد المباشرة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -112,17 +112,22 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة وتتبع الأسباب...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة وطباعة تفاصيل الفحص...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
+                    
+                    # طباعة العملة والفريم الذي يتم فحصه الآن
+                    print(f"🔍 [يفحص الآن] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
+
                     candles = get_klines(symbol, tf, limit=10)
                     if not candles or len(candles) < 5:
+                        print(f"   ⚠️ [استبعاد] بيانات الشموع غير كافية لـ {symbol.upper()} على {tf}", flush=True)
                         continue
                     
                     c1, c2, c3, c4 = candles[-5], candles[-4], candles[-3], candles[-2]
                     
-                    # ==================== [فحص الاستراتيجية الأولى مع تتبع الأسباب] ====================
+                    # ==================== [فحص الاستراتيجية الأولى] ====================
                     sc1, sc2, sc3 = candles[-4], candles[-3], candles[-2]
                     o1, h1, l1, cl1 = sc1['o'], sc1['h'], sc1['l'], sc1['c']
                     o2, h2, l2, cl2 = sc2['o'], sc2['h'], sc2['l'], sc2['c']
@@ -143,11 +148,11 @@ def main():
                         key1 = f"{symbol}_{tf}_{sc3['time']}_strategy1"
                         if key1 not in sent_alerts:
                             sent_alerts[key1] = True
-                            msg1 = f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg1 = f"⭐ *تنبيه الاستراتيجية الأولى (ديول الشموع)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg1)
-                            print(f"🚨 [إشارة الاستراتيجية 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
+                            print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية مع تتبع الأسباب] ====================
+                    # ==================== [فحص الاستراتيجية الثانية] ====================
                     to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
@@ -181,18 +186,16 @@ def main():
                     s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (lw3 < lw2)
                     s2_c4_valid = (tc4 > to4)
 
-                    # تتبع دقيق لسبب الاستبعاد للاستراتيجية الثانية (يظهر لك لماذا لم تتطابق)
+                    # طباعة سبب الاستبعاد للاستراتيجية الثانية لتراها بوضوح
                     if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid and s2_c4_valid):
-                        # يمكنك تفعيل السطر التالي إذا أردت رؤية كل عملة لماذا تم استبعادها بالتفصيل:
-                        # print(f"❌ [{symbol.upper()} | {tf}] استبعاد S2 -> C1:{s2_c1_valid}, C2:{s2_c2_valid}, Break:{s2_price_break}, C3:{s2_c3_valid}, C4:{s2_c4_valid}", flush=True)
-                        pass
+                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] تفاصيل الشروط -> C1_Valid:{s2_c1_valid} | C2_Hammer:{s2_c2_valid} | Break_Low:{s2_price_break} | C3_Bullish:{s2_c3_valid} | C4_Confirm:{s2_c4_valid}", flush=True)
                     else:
                         key2 = f"{symbol}_{tf}_{c4['time']}_strategy2"
                         if key2 not in sent_alerts:
                             sent_alerts[key2] = True
                             msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (4 شموع متقدمة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg2)
-                            print(f"🚨 [إشارة الاستراتيجية 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
+                            print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
                     time.sleep(0.005)
 
