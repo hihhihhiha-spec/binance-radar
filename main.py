@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Precision Strategy Radar (500 Coins) is Active")
+        self.wfile.write(b"Dual Strategy Radar (500 Coins) is Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [تشخيص بدقة النسبة المئوية - 500 عملة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالمعايير المعدلة (ديول الشمعة الأولى والثانية) لـ 500 عملة.")
+    print("🟢 [رادار الاستراتيجيتين - 500 عملة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار المحدث (يضم الاستراتيجية الأولى والثانية) لـ 500 عملة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -112,61 +112,92 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة بالتفصيل الرقمي...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة للاستراتيجيتين...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
+                    # نحتاج لـ 5 شموع لضمان توفر C1, C2, C3, C4 للاستراتيجية الثانية و C1, C2, C3 للأولى
                     candles = get_klines(symbol, tf, limit=10)
-                    if not candles or len(candles) < 4:
+                    if not candles or len(candles) < 5:
                         continue
                     
-                    c1, c2, c3 = candles[-4], candles[-3], candles[-2]
-                    o1, h1, l1, cl1 = c1['o'], c1['h'], c1['l'], c1['c']
-                    o2, h2, l2, cl2 = c2['o'], c2['h'], c2['l'], c2['c']
-                    o3, h3, l3, cl3 = c3['o'], c3['h'], c3['l'], c3['c']
+                    # استخراج الشموع المطلوبة (من الأقدم للأحدث: -5 إلى -2)
+                    c1, c2, c3, c4 = candles[-5], candles[-4], candles[-3], candles[-2]
+                    
+                    # --- [فحص الاستراتيجية الأولى] ---
+                    # تعتمد على C1 (السابقة), C2, C3 الحالية
+                    sc1, sc2, sc3 = candles[-4], candles[-3], candles[-2]
+                    o1, h1, l1, cl1 = sc1['o'], sc1['h'], sc1['l'], sc1['c']
+                    o2, h2, l2, cl2 = sc2['o'], sc2['h'], sc2['l'], sc2['c']
+                    o3, h3, l3, cl3 = sc3['o'], sc3['h'], sc3['l'], sc3['c']
 
                     body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
                     body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-                    body3, u_wick3, l_wick3 = get_wick_body(o3, h3, l3, cl3)
 
-                    # طباعة رقمية تحليلية مفصلة لكل شمعة
-                    print(f"📊 [{symbol.upper()} | {tf}] تفحص القيم:", flush=True)
-                    print(f"   C1 -> O:{o1} H:{h1} L:{l1} C:{cl1} | Body:{body1:.4f} UW:{u_wick1:.4f} LW:{l_wick1:.4f}", flush=True)
-                    print(f"   C2 -> O:{o2} H:{h2} L:{l2} C:{cl2} | Body:{body2:.4f} UW:{u_wick2:.4f} LW:{l_wick2:.4f}", flush=True)
-                    print(f"   C3 -> O:{o3} H:{h3} L:{l3} C:{cl3} | Body:{body3:.4f} UW:{u_wick3:.4f} LW:{l_wick3:.4f}", flush=True)
-
-                    # 1. الشمعة الأولى: هابطة + ذيلها العلوي يجب أن يتجاوز 5% من حجم جسمها
+                    # تطبيق شروط الاستراتيجية الأولى
                     min_c1_u_wick = body1 * 0.05
-                    if cl1 >= o1 or u_wick1 <= min_c1_u_wick:
-                        print(f"   ❌ استبعاد: C1 إما ليست هابطة أو ذيلها العلوي لا يتجاوز 5%", flush=True)
-                        continue
-
-                    # 2. الشمعة الثانية: حمراء + ذيل علوي لا يتجاوز 5% + ذيل سفلي أكبر من 5% من جسمها
                     max_c2_u_wick = body2 * 0.05
                     min_c2_l_wick = body2 * 0.05
-                    if not (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick):
-                        print(f"   ❌ استبعاد: شروط C2 غير مطابقة (الذيل العلوي أو السفلي)", flush=True)
-                        continue
 
-                    print(f"   💡 [تم اجتياز C1 و C2 بنجاح!] فحص الشمعة الثالثة...", flush=True)
+                    cond1_ok = (cl1 < o1 and u_wick1 > min_c1_u_wick)
+                    cond2_ok = (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick)
+                    cond3_ok = (cl3 > o3 and (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2))
 
-                    # 3. الشمعة الثالثة: صاعدة ومحققة لشروط الاختراق والنطاق
-                    if cl3 <= o3:
-                        print(f"   ❌ استبعاد: C3 ليست صاعدة", flush=True)
-                        continue
+                    if cond1_ok and cond2_ok and cond3_ok:
+                        key1 = f"{symbol}_{tf}_{sc3['time']}_strategy1"
+                        if key1 not in sent_alerts:
+                            sent_alerts[key1] = True
+                            msg1 = f"⭐ *تنبيه الاستراتيجية الأولى (ديول الشموع)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            send_telegram_message(msg1)
+                            print(f"🚨 [إشارة الاستراتيجية 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    trailing_condition = (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2)
-                    if not trailing_condition:
-                        print(f"   ❌ استبعاد: شرط التتبع أو الاختراق لـ C3 غير محقق", flush=True)
-                        continue
+                    # --- [فحص الاستراتيجية الثانية] ---
+                    # تعتمد على 4 شموع: c1, c2 (المطرقة), c3 (الابتلاعية), c4 (التأكيدية)
+                    to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']  # الأولى
+                    to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']  # الثانية (المطرقة)
+                    to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']  # الثالثة (الابتلاعية)
+                    to4, th4, tl4, tc4 = c4['o'], c4['h'], c4['l'], c4['c']  # الرابعة (التأكيدية)
 
-                    # نجاح تام
-                    key = f"{symbol}_{tf}_{c3['time']}_strict_uwicks_v5"
-                    if key not in sent_alerts:
-                        sent_alerts[key] = True
-                        msg = f"⭐ *تنبيه مطبق بدقة الديول*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                        send_telegram_message(msg)
-                        print(f"🚨 [إشارة صحيحة ومؤكدة!] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
+                    total_len1 = th1 - tl1
+                    if total_len1 > 0:
+                        body_sz1 = abs(to1 - tc1)
+                        body_pct1 = (body_sz1 / total_len1) * 100
+                        lower_pct1 = (l_wick_calc(to1, th1, tl1, tc1) / total_len1) * 100
+                        upper_pct1 = (u_wick_calc(to1, th1, tl1, tc1) / total_len1) * 100
+
+                        # شروط الشمعة الأولى للاستراتيجية 2
+                        s2_c1_valid = (50 <= body_pct1 <= 70) and (20 <= lower_pct1 <= 35) and (5 <= upper_pct1 <= 15)
+                    else:
+                        s2_c1_valid = False
+
+                    total_len2 = th2 - tl2
+                    if total_len2 > 0 and tc2 < to2: # حمراء
+                        body_sz2 = abs(to2 - tc2)
+                        body_pct2 = (body_sz2 / total_len2) * 100
+                        lower_pct2 = (l_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
+                        upper_pct2 = (u_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
+
+                        # شروط الشمعة الثانية (المطرقة)
+                        s2_c2_valid = (15 <= body_pct2 <= 30) and (60 <= lower_pct2 <= 75) and (0 <= upper_pct2 <= 1)
+                        # الشرط السعري الصارم: سعر إغلاق المطرقة كسر قاع الأولى واغلق تحته تماماً
+                        s2_price_break = tc2 < tl1
+                    else:
+                        s2_c2_valid = False
+                        s2_price_break = False
+
+                    # الشمعة الثالثة: خضراء ابتلاعية (تفتح عند إغلاق المطرقة وتغلق أعلى من قمة المطرقة) والديل السفلي أقصر من المطرقة
+                    s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (l_wick_calc(to3, th3, tl3, tc3) < l_wick_calc(to2, th2, tl2, tc2))
+
+                    # الشمعة الرابعة: خضراء تأكيدية
+                    s2_c4_valid = (tc4 > to4)
+
+                    if s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid and s2_c4_valid:
+                        key2 = f"{symbol}_{tf}_{c4['time']}_strategy2"
+                        if key2 not in sent_alerts:
+                            sent_alerts[key2] = True
+                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (4 شموع متقدمة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            send_telegram_message(msg2)
+                            print(f"🚨 [إشارة الاستراتيجية 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
                     time.sleep(0.01)
 
@@ -177,6 +208,13 @@ def main():
         except Exception as e:
             print(f"⚠️ خطأ: {e}", flush=True)
             time.sleep(10)
+
+# دوال مساعدة لحساب الديول نسبياً
+def l_wick_calc(o, h, l, c):
+    return min(o, c) - l
+
+def u_wick_calc(o, h, l, c):
+    return h - max(o, c)
 
 if __name__ == "__main__":
     main()
