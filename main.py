@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar with Full Live Print is Active")
+        self.wfile.write(b"Dual Strategy Radar - Hammer Wick Adjusted")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - طباعة حية وتتبع الاستبعاد مفعل] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار مع طباعة الفحص وأسباب الاستبعاد المباشرة.")
+    print("🟢 [رادار الاستراتيجيتين - تعديل ديل المطرقة مفعل] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار (مع تعديل مرونة ديل المطرقة).")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -117,7 +117,6 @@ def main():
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
                     
-                    # طباعة العملة والفريم الذي يتم فحصه الآن
                     print(f"🔍 [يفحص الآن] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
 
                     candles = get_klines(symbol, tf, limit=10)
@@ -148,11 +147,11 @@ def main():
                         key1 = f"{symbol}_{tf}_{sc3['time']}_strategy1"
                         if key1 not in sent_alerts:
                             sent_alerts[key1] = True
-                            msg1 = f"⭐ *تنبيه الاستراتيجية الأولى (ديول الشموع)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg1 = f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg1)
                             print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية] ====================
+                    # ==================== [فحص الاستراتيجية الثانية (مع التعديل المرن لديل المطرقة)] ====================
                     to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
@@ -175,7 +174,8 @@ def main():
                         lower_pct2 = (l_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
                         upper_pct2 = (u_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
 
-                        s2_c2_valid = (15 <= body_pct2 <= 30) and (60 <= lower_pct2 <= 75) and (0 <= upper_pct2 <= 1)
+                        # [تم التعديل هنا]: توسيع نسبة الديل السفلي للمطرقة (40% إلى 80%) والديل العلوي (حتى 3%)
+                        s2_c2_valid = (15 <= body_pct2 <= 30) and (40 <= lower_pct2 <= 80) and (0 <= upper_pct2 <= 3)
                         s2_price_break = (tc2 < tl1)
                     else:
                         s2_c2_valid = False
@@ -186,14 +186,13 @@ def main():
                     s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (lw3 < lw2)
                     s2_c4_valid = (tc4 > to4)
 
-                    # طباعة سبب الاستبعاد للاستراتيجية الثانية لتراها بوضوح
                     if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid and s2_c4_valid):
-                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] تفاصيل الشروط -> C1_Valid:{s2_c1_valid} | C2_Hammer:{s2_c2_valid} | Break_Low:{s2_price_break} | C3_Bullish:{s2_c3_valid} | C4_Confirm:{s2_c4_valid}", flush=True)
+                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1_Valid:{s2_c1_valid} | C2_Hammer:{s2_c2_valid} | Break_Low:{s2_price_break} | C3:{s2_c3_valid} | C4:{s2_c4_valid}", flush=True)
                     else:
                         key2 = f"{symbol}_{tf}_{c4['time']}_strategy2"
                         if key2 not in sent_alerts:
                             sent_alerts[key2] = True
-                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (4 شموع متقدمة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (4 شموع)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg2)
                             print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
