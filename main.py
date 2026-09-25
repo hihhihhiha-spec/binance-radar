@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar - Near-Miss Diagnostic Active")
+        self.wfile.write(b"Full Diagnostic Radar Active")
     def log_message(self, format, *args):
         pass
 
@@ -87,15 +87,15 @@ def get_klines(symbol, interval, limit=10):
         pass
     return []
 
-def get_wick_body(o, h, l, c):
-    body = abs(o - c)
-    upper_wick = h - max(o, c)
-    lower_wick = min(o, c) - l
-    return body, upper_wick, lower_wick
+def l_wick_calc(o, h, l, c):
+    return min(o, c) - l
+
+def u_wick_calc(o, h, l, c):
+    return h - max(o, c)
 
 def main():
-    print("🟢 [رادار التشخيص - نظام رصد العملات القريبة جداً من النجاح] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار مع تفعيل نظام رصد العملات القريبة جداً من الهدف.")
+    print("🟢 [رادار الفحص الحي الشامل] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار مع تفعيل طباعة الفحص الحي للعملات.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -112,7 +112,7 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة وتحليل القرب من الهدف...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] بدء فحص العملات والفريمات...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
@@ -123,32 +123,7 @@ def main():
                     
                     c1, c2, c3 = candles[-4], candles[-3], candles[-2]
                     
-                    # ==================== [فحص الاستراتيجية الأولى] ====================
-                    sc1, sc2, sc3 = candles[-4], candles[-3], candles[-2]
-                    o1, h1, l1, cl1 = sc1['o'], sc1['h'], sc1['l'], sc1['c']
-                    o2, h2, l2, cl2 = sc2['o'], sc2['h'], sc2['l'], sc2['c']
-                    o3, h3, l3, cl3 = sc3['o'], sc3['h'], sc3['l'], sc3['c']
-
-                    body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
-                    body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-
-                    min_c1_u_wick = body1 * 0.05
-                    max_c2_u_wick = body2 * 0.05
-                    min_c2_l_wick = body2 * 0.05
-
-                    c1_ok = (cl1 < o1 and u_wick1 > min_c1_u_wick)
-                    c2_ok = (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick)
-                    c3_ok = (cl3 > o3 and (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2))
-
-                    if c1_ok and c2_ok and c3_ok:
-                        key1 = f"{symbol}_{tf}_{sc3['time']}_strategy1"
-                        if key1 not in sent_alerts:
-                            sent_alerts[key1] = True
-                            msg1 = f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                            send_telegram_message(msg1)
-                            print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
-
-                    # ==================== [فحص الاستراتيجية الثانية مع نظام كشف القرب] ====================
+                    # ==================== [فحص الاستراتيجية الثانية] ====================
                     to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
@@ -183,16 +158,10 @@ def main():
                     lw2 = l_wick_calc(to2, th2, tl2, tc2)
                     s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (lw3 < lw2)
 
-                    # حساب عدد الشروط المحققة لمعرفة مدى "القرب" من الهدف (من أصل 4 شروط رئيسية)
-                    conditions_met = sum([s2_c1_valid, s2_c2_valid, s2_price_break, s2_c3_valid])
+                    # طباعة حالة الفحص لكل عملة وفريم بشكل مباشر لتراها بنفسك
+                    print(f"🔍 فحص {symbol.upper()} [{tf}] -> الشمعة الأولى: {s2_c1_valid} | الشمعة الثانية: {s2_c2_valid} | كسر القاع: {s2_price_break} | الشمعة الثالثة: {s2_c3_valid}", flush=True)
 
-                    if conditions_met == 3:
-                        # إذا حققت 3 شروط من أصل 4، فهذه عملة قريبة جداً من النجاح!
-                        print(f"🎯 [قريبة جداً من الهدف S2] العملة: {symbol.upper()} | الفريم: {tf} -> تحققت 3 شروط وبقي شرط واحد (C1:{s2_c1_valid}, C2:{s2_c2_valid}, Break:{s2_price_break}, C3:{s2_c3_valid})", flush=True)
-
-                    if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid):
-                        pass # استبعاد عادي صامت لكي لا يملأ الشاشة
-                    else:
+                    if s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid:
                         key2 = f"{symbol}_{tf}_{c3['time']}_strategy2"
                         if key2 not in sent_alerts:
                             sent_alerts[key2] = True
@@ -209,12 +178,6 @@ def main():
         except Exception as e:
             print(f"⚠️ خطأ: {e}", flush=True)
             time.sleep(10)
-
-def l_wick_calc(o, h, l, c):
-    return min(o, c) - l
-
-def u_wick_calc(o, h, l, c):
-    return h - max(o, c)
 
 if __name__ == "__main__":
     main()
