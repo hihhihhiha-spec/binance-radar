@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar with Full Live Print is Active")
+        self.wfile.write(b"Dual Strategy Radar Active")
     def log_message(self, format, *args):
         pass
 
@@ -62,7 +62,10 @@ def get_top_futures_symbols(limit=500):
         print(f"❌ خطأ جلب العملات: {e}", flush=True)
     return []
 
-BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
+# الفريمات المطلوبة من دقيقة إلى 4 ساعات
+BYBIT_INTERVALS = {
+    '1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'
+}
 
 def get_klines(symbol, interval, limit=10):
     try:
@@ -94,10 +97,10 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - طباعة حية وتتبع الاستبعاد مفعل] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار مع طباعة الفحص وأسباب الاستبعاد المباشرة.")
+    print("🟢 [رادار الاستراتيجيتين - من 1 دقيقة إلى 4 ساعات] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالفريمات المحددة (من 1m إلى 4h).")
 
-    timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
+    timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
     last_update_time = datetime.min
     cycle = 1
@@ -112,17 +115,13 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة وطباعة تفاصيل الفحص...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة على الفريمات (1m - 4h)...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
                     
-                    # طباعة العملة والفريم الذي يتم فحصه الآن
-                    print(f"🔍 [يفحص الآن] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
-
                     candles = get_klines(symbol, tf, limit=10)
                     if not candles or len(candles) < 5:
-                        print(f"   ⚠️ [استبعاد] بيانات الشموع غير كافية لـ {symbol.upper()} على {tf}", flush=True)
                         continue
                     
                     c1, c2, c3, c4 = candles[-5], candles[-4], candles[-3], candles[-2]
@@ -186,10 +185,7 @@ def main():
                     s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (lw3 < lw2)
                     s2_c4_valid = (tc4 > to4)
 
-                    # طباعة سبب الاستبعاد للاستراتيجية الثانية لتراها بوضوح
-                    if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid and s2_c4_valid):
-                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] تفاصيل الشروط -> C1_Valid:{s2_c1_valid} | C2_Hammer:{s2_c2_valid} | Break_Low:{s2_price_break} | C3_Bullish:{s2_c3_valid} | C4_Confirm:{s2_c4_valid}", flush=True)
-                    else:
+                    if s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid and s2_c4_valid:
                         key2 = f"{symbol}_{tf}_{c4['time']}_strategy2"
                         if key2 not in sent_alerts:
                             sent_alerts[key2] = True
@@ -197,9 +193,9 @@ def main():
                             send_telegram_message(msg2)
                             print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    time.sleep(0.005)
+                    time.sleep(0.003)
 
-            print(f"✅ اكتملت الدورة رقم {cycle} لـ 500 عملة", flush=True)
+            print(f"✅ اكتملت الدورة رقم {cycle}", flush=True)
             cycle += 1
             time.sleep(5)
 
