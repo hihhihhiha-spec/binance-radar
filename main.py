@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar - 3 Candles Strategy Active")
+        self.wfile.write(b"Dual Strategy Radar - Near-Miss Diagnostic Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - تم إلغاء الشمعة الرابعة للاستراتيجية الثانية] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار (الاستراتيجية الثانية أصبحت تعتمد على 3 شموع لاقتناص الفرص بشكل أسرع).")
+    print("🟢 [رادار التشخيص - نظام رصد العملات القريبة جداً من النجاح] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار مع تفعيل نظام رصد العملات القريبة جداً من الهدف.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -112,19 +112,15 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة وطباعة تفاصيل الفحص...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة وتحليل القرب من الهدف...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    
-                    print(f"🔍 [يفحص الآن] العملة: {symbol.upper()} | الفريم: {tf}", flush=True)
 
                     candles = get_klines(symbol, tf, limit=10)
                     if not candles or len(candles) < 5:
-                        print(f"   ⚠️ [استبعاد] بيانات الشموع غير كافية لـ {symbol.upper()} على {tf}", flush=True)
                         continue
                     
-                    # نستخدم آخر الشموع المتاحة للفحص
                     c1, c2, c3 = candles[-4], candles[-3], candles[-2]
                     
                     # ==================== [فحص الاستراتيجية الأولى] ====================
@@ -152,7 +148,7 @@ def main():
                             send_telegram_message(msg1)
                             print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية (3 شموع فقط: C1, C2, C3)] ====================
+                    # ==================== [فحص الاستراتيجية الثانية مع نظام كشف القرب] ====================
                     to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
@@ -174,9 +170,7 @@ def main():
                         lower_pct2 = (l_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
                         upper_pct2 = (u_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
 
-                        # 1) المطرقة المرنة
                         is_hammer = (15 <= body_pct2 <= 30) and (40 <= lower_pct2 <= 80) and (0 <= upper_pct2 <= 3)
-                        # 2) الشمعة الحمراء الممتلئة
                         is_filled_red_with_lower_wick = (body_pct2 >= 50) and (lower_pct2 > 0) and (body_pct2 > lower_pct2) and (upper_pct2 <= 2)
 
                         s2_c2_valid = is_hammer or is_filled_red_with_lower_wick
@@ -189,9 +183,15 @@ def main():
                     lw2 = l_wick_calc(to2, th2, tl2, tc2)
                     s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (lw3 < lw2)
 
-                    # تم الاكتفاء بالشروط الثلاثة الأولى فقط
+                    # حساب عدد الشروط المحققة لمعرفة مدى "القرب" من الهدف (من أصل 4 شروط رئيسية)
+                    conditions_met = sum([s2_c1_valid, s2_c2_valid, s2_price_break, s2_c3_valid])
+
+                    if conditions_met == 3:
+                        # إذا حققت 3 شروط من أصل 4، فهذه عملة قريبة جداً من النجاح!
+                        print(f"🎯 [قريبة جداً من الهدف S2] العملة: {symbol.upper()} | الفريم: {tf} -> تحققت 3 شروط وبقي شرط واحد (C1:{s2_c1_valid}, C2:{s2_c2_valid}, Break:{s2_price_break}, C3:{s2_c3_valid})", flush=True)
+
                     if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid):
-                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1:{s2_c1_valid} | C2:{s2_c2_valid} | Break:{s2_price_break} | C3:{s2_c3_valid}", flush=True)
+                        pass # استبعاد عادي صامت لكي لا يملأ الشاشة
                     else:
                         key2 = f"{symbol}_{tf}_{c3['time']}_strategy2"
                         if key2 not in sent_alerts:
