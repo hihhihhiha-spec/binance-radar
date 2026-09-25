@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar - Dual C2 Pattern Active")
+        self.wfile.write(b"Dual Strategy Radar - 3 Candles Strategy Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - دعم المطرقة + الشمعة الحمراء الممتلئة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار (مع دمج شمعة المطرقة والشمعة الحمراء ذات الجسم الممتلئ والذيل السفلي).")
+    print("🟢 [رادار الاستراتيجيتين - تم إلغاء الشمعة الرابعة للاستراتيجية الثانية] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار (الاستراتيجية الثانية أصبحت تعتمد على 3 شموع لاقتناص الفرص بشكل أسرع).")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -124,7 +124,8 @@ def main():
                         print(f"   ⚠️ [استبعاد] بيانات الشموع غير كافية لـ {symbol.upper()} على {tf}", flush=True)
                         continue
                     
-                    c1, c2, c3, c4 = candles[-5], candles[-4], candles[-3], candles[-2]
+                    # نستخدم آخر الشموع المتاحة للفحص
+                    c1, c2, c3 = candles[-4], candles[-3], candles[-2]
                     
                     # ==================== [فحص الاستراتيجية الأولى] ====================
                     sc1, sc2, sc3 = candles[-4], candles[-3], candles[-2]
@@ -151,11 +152,10 @@ def main():
                             send_telegram_message(msg1)
                             print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية (المطرقة أو الشمعة الحمراء الممتلئة)] ====================
+                    # ==================== [فحص الاستراتيجية الثانية (3 شموع فقط: C1, C2, C3)] ====================
                     to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
-                    to4, th4, tl4, tc4 = c4['o'], c4['h'], c4['l'], c4['c']
 
                     total_len1 = th1 - tl1
                     if total_len1 > 0:
@@ -174,15 +174,12 @@ def main():
                         lower_pct2 = (l_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
                         upper_pct2 = (u_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
 
-                        # 1) الشرط القديم: شمعة المطرقة المرنة
+                        # 1) المطرقة المرنة
                         is_hammer = (15 <= body_pct2 <= 30) and (40 <= lower_pct2 <= 80) and (0 <= upper_pct2 <= 3)
-                        
-                        # 2) الشرط الجديد: شمعة حمراء ذات جسم ممتلئ أكبر من ذيلها السفلي (جسم كبير + ذيل سفلي فقط/أو صغير)
+                        # 2) الشمعة الحمراء الممتلئة
                         is_filled_red_with_lower_wick = (body_pct2 >= 50) and (lower_pct2 > 0) and (body_pct2 > lower_pct2) and (upper_pct2 <= 2)
 
-                        # الشمعة الثانية مقبولة إذا تحققت المطرقة أو الشمعة الحمراء الممتلئة
                         s2_c2_valid = is_hammer or is_filled_red_with_lower_wick
-                        
                         s2_price_break = (tc2 < tl1)
                     else:
                         s2_c2_valid = False
@@ -191,15 +188,15 @@ def main():
                     lw3 = l_wick_calc(to3, th3, tl3, tc3)
                     lw2 = l_wick_calc(to2, th2, tl2, tc2)
                     s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (lw3 < lw2)
-                    s2_c4_valid = (tc4 > to4)
 
-                    if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid and s2_c4_valid):
-                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1:{s2_c1_valid} | C2(Hammer/FilledRed):{s2_c2_valid} | Break:{s2_price_break} | C3:{s2_c3_valid} | C4:{s2_c4_valid}", flush=True)
+                    # تم الاكتفاء بالشروط الثلاثة الأولى فقط
+                    if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid):
+                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1:{s2_c1_valid} | C2:{s2_c2_valid} | Break:{s2_price_break} | C3:{s2_c3_valid}", flush=True)
                     else:
-                        key2 = f"{symbol}_{tf}_{c4['time']}_strategy2"
+                        key2 = f"{symbol}_{tf}_{c3['time']}_strategy2"
                         if key2 not in sent_alerts:
                             sent_alerts[key2] = True
-                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (متقدمة - مطرقة أو شمعة ممتلئة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (3 شموع)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg2)
                             print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
