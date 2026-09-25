@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar - All Timeframes Active")
+        self.wfile.write(b"Dual Strategy Radar Active")
     def log_message(self, format, *args):
         pass
 
@@ -62,19 +62,9 @@ def get_top_futures_symbols(limit=500):
         print(f"❌ خطأ جلب العملات: {e}", flush=True)
     return []
 
-# جميع الفريمات مدعومة هنا
 BYBIT_INTERVALS = {
-    '1m': '1', 
-    '3m': '3', 
-    '5m': '5', 
-    '15m': '15', 
-    '30m': '30', 
-    '1h': '60', 
-    '2h': '120', 
-    '4h': '240', 
-    '6h': '360', 
-    '12h': '720', 
-    '1d': 'D'
+    '1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', 
+    '1h': '60', '2h': '120', '4h': '240', '6h': '360', '12h': '720', '1d': 'D'
 }
 
 def get_klines(symbol, interval, limit=10):
@@ -107,8 +97,8 @@ def u_wick_calc(o, h, l, c):
     return h - max(o, c)
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - جميع الفريمات] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل رادار الاستراتيجيتين مع تغطية كافة الفريمات.")
+    print("🟢 [رادار الاستراتيجيتين - شامل كافة الفريمات] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بكافة الفريمات (الاستراتيجية الأولى بشروطها الأصلية + الثانية بمرونتها الجديدة).")
 
     timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d']
     symbols = []
@@ -140,7 +130,7 @@ def main():
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
 
-                    # ==================== [الاستراتيجية الأولى] ====================
+                    # ==================== [الاستراتيجية الأولى - شروطها الأصلية الصارمة] ====================
                     s1_c1_red = (tc1 < to1)
                     s1_c2_red = (tc2 < to2)
                     
@@ -154,7 +144,7 @@ def main():
                     
                     strat1_valid = s1_c1_red and s1_c2_red and s1_bodies_larger and s1_break_lower
 
-                    # ==================== [الاستراتيجية الثانية (المرنة)] ====================
+                    # ==================== [الاستراتيجية الثانية - الشروط المرنة المحدثة] ====================
                     total_len1 = th1 - tl1
                     if total_len1 > 0:
                         body_sz1 = abs(to1 - tc1)
@@ -195,7 +185,7 @@ def main():
                         key1 = f"{symbol}_{tf}_{c2['time']}_strategy1"
                         if key1 not in sent_alerts:
                             sent_alerts[key1] = True
-                            msg1 = f"🚨 *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg1 = f"🚨 *تنبيه الاستراتيجية الأولى (الأصلية)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg1)
 
                     if strat2_valid:
