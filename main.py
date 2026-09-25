@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Full Diagnostic Radar Active")
+        self.wfile.write(b"Dual Strategy Radar - All Timeframes Active")
     def log_message(self, format, *args):
         pass
 
@@ -62,7 +62,20 @@ def get_top_futures_symbols(limit=500):
         print(f"❌ خطأ جلب العملات: {e}", flush=True)
     return []
 
-BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
+# جميع الفريمات مدعومة هنا
+BYBIT_INTERVALS = {
+    '1m': '1', 
+    '3m': '3', 
+    '5m': '5', 
+    '15m': '15', 
+    '30m': '30', 
+    '1h': '60', 
+    '2h': '120', 
+    '4h': '240', 
+    '6h': '360', 
+    '12h': '720', 
+    '1d': 'D'
+}
 
 def get_klines(symbol, interval, limit=10):
     try:
@@ -94,10 +107,10 @@ def u_wick_calc(o, h, l, c):
     return h - max(o, c)
 
 def main():
-    print("🟢 [رادار الفحص الحي الشامل] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار مع تفعيل طباعة الفحص الحي للعملات.")
+    print("🟢 [رادار الاستراتيجيتين - جميع الفريمات] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل رادار الاستراتيجيتين مع تغطية كافة الفريمات.")
 
-    timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
+    timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d']
     symbols = []
     last_update_time = datetime.min
     cycle = 1
@@ -112,7 +125,7 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] بدء فحص العملات والفريمات...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص جميع العملات على كافة الفريمات...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
@@ -123,18 +136,33 @@ def main():
                     
                     c1, c2, c3 = candles[-4], candles[-3], candles[-2]
                     
-                    # ==================== [فحص الاستراتيجية الثانية] ====================
                     to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
 
+                    # ==================== [الاستراتيجية الأولى] ====================
+                    s1_c1_red = (tc1 < to1)
+                    s1_c2_red = (tc2 < to2)
+                    
+                    body1_s1 = abs(tc1 - to1)
+                    wicks1_s1 = (th1 - max(to1, tc1)) + (min(to1, tc1) - tl1)
+                    body2_s1 = abs(tc2 - to2)
+                    wicks2_s1 = (th2 - max(to2, tc2)) + (min(to2, tc2) - tl2)
+                    
+                    s1_bodies_larger = (body1_s1 > wicks1_s1) and (body2_s1 > wicks2_s1)
+                    s1_break_lower = (tl2 < tl1)
+                    
+                    strat1_valid = s1_c1_red and s1_c2_red and s1_bodies_larger and s1_break_lower
+
+                    # ==================== [الاستراتيجية الثانية (المرنة)] ====================
                     total_len1 = th1 - tl1
                     if total_len1 > 0:
                         body_sz1 = abs(to1 - tc1)
                         body_pct1 = (body_sz1 / total_len1) * 100
                         lower_pct1 = (l_wick_calc(to1, th1, tl1, tc1) / total_len1) * 100
                         upper_pct1 = (u_wick_calc(to1, th1, tl1, tc1) / total_len1) * 100
-                        s2_c1_valid = (50 <= body_pct1 <= 70) and (20 <= lower_pct1 <= 35) and (5 <= upper_pct1 <= 15)
+                        
+                        s2_c1_valid = (45 <= body_pct1 <= 75) and (15 <= lower_pct1 <= 40) and (0 <= upper_pct1 <= 20)
                     else:
                         s2_c1_valid = False
 
@@ -145,8 +173,8 @@ def main():
                         lower_pct2 = (l_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
                         upper_pct2 = (u_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
 
-                        is_hammer = (15 <= body_pct2 <= 30) and (40 <= lower_pct2 <= 80) and (0 <= upper_pct2 <= 3)
-                        is_filled_red_with_lower_wick = (body_pct2 >= 50) and (lower_pct2 > 0) and (body_pct2 > lower_pct2) and (upper_pct2 <= 2)
+                        is_hammer = (10 <= body_pct2 <= 35) and (35 <= lower_pct2 <= 85) and (0 <= upper_pct2 <= 5)
+                        is_filled_red_with_lower_wick = (body_pct2 >= 45) and (lower_pct2 >= 0) and (upper_pct2 <= 5)
 
                         s2_c2_valid = is_hammer or is_filled_red_with_lower_wick
                         s2_price_break = (tc2 < tl1)
@@ -156,22 +184,30 @@ def main():
 
                     lw3 = l_wick_calc(to3, th3, tl3, tc3)
                     lw2 = l_wick_calc(to2, th2, tl2, tc2)
-                    s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.05) and (tc3 > th2) and (lw3 < lw2)
+                    s2_c3_valid = (tc3 > to3) and (abs(to3 - tc2) <= (th2 - tl2) * 0.08) and (tc3 > th2) and (lw3 <= lw2 * 1.1)
 
-                    # طباعة حالة الفحص لكل عملة وفريم بشكل مباشر لتراها بنفسك
-                    print(f"🔍 فحص {symbol.upper()} [{tf}] -> الشمعة الأولى: {s2_c1_valid} | الشمعة الثانية: {s2_c2_valid} | كسر القاع: {s2_price_break} | الشمعة الثالثة: {s2_c3_valid}", flush=True)
+                    strat2_valid = s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid
 
-                    if s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid:
+                    if strat1_valid or strat2_valid:
+                        print(f"🎯 تطابق بـ {symbol.upper()} [{tf}] -> الاستراتيجية 1: {strat1_valid} | الاستراتيجية 2: {strat2_valid}", flush=True)
+
+                    if strat1_valid:
+                        key1 = f"{symbol}_{tf}_{c2['time']}_strategy1"
+                        if key1 not in sent_alerts:
+                            sent_alerts[key1] = True
+                            msg1 = f"🚨 *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            send_telegram_message(msg1)
+
+                    if strat2_valid:
                         key2 = f"{symbol}_{tf}_{c3['time']}_strategy2"
                         if key2 not in sent_alerts:
                             sent_alerts[key2] = True
-                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (3 شموع)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (المرنة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg2)
-                            print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    time.sleep(0.005)
+                    time.sleep(0.003)
 
-            print(f"✅ اكتملت الدورة رقم {cycle} لـ 500 عملة", flush=True)
+            print(f"✅ اكتملت الدورة رقم {cycle} لكافة الفريمات", flush=True)
             cycle += 1
             time.sleep(5)
 
