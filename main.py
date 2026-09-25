@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategy Radar - Hammer Wick Adjusted")
+        self.wfile.write(b"Dual Strategy Radar - Dual C2 Pattern Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - تعديل ديل المطرقة مفعل] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار (مع تعديل مرونة ديل المطرقة).")
+    print("🟢 [رادار الاستراتيجيتين - دعم المطرقة + الشمعة الحمراء الممتلئة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار (مع دمج شمعة المطرقة والشمعة الحمراء ذات الجسم الممتلئ والذيل السفلي).")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -151,7 +151,7 @@ def main():
                             send_telegram_message(msg1)
                             print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية (مع التعديل المرن لديل المطرقة)] ====================
+                    # ==================== [فحص الاستراتيجية الثانية (المطرقة أو الشمعة الحمراء الممتلئة)] ====================
                     to1, th1, tl1, tc1 = c1['o'], c1['h'], c1['l'], c1['c']
                     to2, th2, tl2, tc2 = c2['o'], c2['h'], c2['l'], c2['c']
                     to3, th3, tl3, tc3 = c3['o'], c3['h'], c3['l'], c3['c']
@@ -174,8 +174,15 @@ def main():
                         lower_pct2 = (l_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
                         upper_pct2 = (u_wick_calc(to2, th2, tl2, tc2) / total_len2) * 100
 
-                        # [تم التعديل هنا]: توسيع نسبة الديل السفلي للمطرقة (40% إلى 80%) والديل العلوي (حتى 3%)
-                        s2_c2_valid = (15 <= body_pct2 <= 30) and (40 <= lower_pct2 <= 80) and (0 <= upper_pct2 <= 3)
+                        # 1) الشرط القديم: شمعة المطرقة المرنة
+                        is_hammer = (15 <= body_pct2 <= 30) and (40 <= lower_pct2 <= 80) and (0 <= upper_pct2 <= 3)
+                        
+                        # 2) الشرط الجديد: شمعة حمراء ذات جسم ممتلئ أكبر من ذيلها السفلي (جسم كبير + ذيل سفلي فقط/أو صغير)
+                        is_filled_red_with_lower_wick = (body_pct2 >= 50) and (lower_pct2 > 0) and (body_pct2 > lower_pct2) and (upper_pct2 <= 2)
+
+                        # الشمعة الثانية مقبولة إذا تحققت المطرقة أو الشمعة الحمراء الممتلئة
+                        s2_c2_valid = is_hammer or is_filled_red_with_lower_wick
+                        
                         s2_price_break = (tc2 < tl1)
                     else:
                         s2_c2_valid = False
@@ -187,12 +194,12 @@ def main():
                     s2_c4_valid = (tc4 > to4)
 
                     if not (s2_c1_valid and s2_c2_valid and s2_price_break and s2_c3_valid and s2_c4_valid):
-                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1_Valid:{s2_c1_valid} | C2_Hammer:{s2_c2_valid} | Break_Low:{s2_price_break} | C3:{s2_c3_valid} | C4:{s2_c4_valid}", flush=True)
+                        print(f"   ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1:{s2_c1_valid} | C2(Hammer/FilledRed):{s2_c2_valid} | Break:{s2_price_break} | C3:{s2_c3_valid} | C4:{s2_c4_valid}", flush=True)
                     else:
                         key2 = f"{symbol}_{tf}_{c4['time']}_strategy2"
                         if key2 not in sent_alerts:
                             sent_alerts[key2] = True
-                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (4 شموع)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg2 = f"⭐ *تنبيه الاستراتيجية الثانية (متقدمة - مطرقة أو شمعة ممتلئة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg2)
                             print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
 
