@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategies Radar with Exact Rules is Active")
+        self.wfile.write(b"Dual Strategies Radar with Updated Strategy 2 is Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - الشروط الدقيقة الجديدة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجيتين والشروط الجديدة.")
+    print("🟢 [رادار الاستراتيجيتين - التعديل الدقيق للاستراتيجية الثانية] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجيتين والشروط المحدثة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -120,7 +120,7 @@ def main():
                     if not candles or len(candles) < 5:
                         continue
                     
-                    # ==================== [فحص الاستراتيجية الأولى] ====================
+                    # ==================== [فحص الاستراتيجية الأولى (كما هي تماماً)] ====================
                     c1_s1, c2_s1, c3_s1 = candles[-4], candles[-3], candles[-2]
                     o1, h1, l1, cl1 = c1_s1['o'], c1_s1['h'], c1_s1['l'], c1_s1['c']
                     o2, h2, l2, cl2 = c2_s1['o'], c2_s1['h'], c2_s1['l'], c2_s1['c']
@@ -149,8 +149,7 @@ def main():
                     else:
                         print(f"    ❌ [استبعاد S1 لـ {symbol.upper()} | {tf}] C1:{c1_ok} | C2:{c2_ok} | C3:{c3_ok}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية الجديدة] ====================
-                    # تتطلب 3 شموع متتالية: C1 (الأولى)، C2 (الثانية)، C3 (الثالثة الخضراء)
+                    # ==================== [فحص الاستراتيجية الثانية (المعدلة حسب طلبك بدقة)] ====================
                     s2_c1, s2_c2, s2_c3 = candles[-4], candles[-3], candles[-2]
                     
                     to1, th1, tl1, tc1 = s2_c1['o'], s2_c1['h'], s2_c1['l'], s2_c1['c']
@@ -169,34 +168,34 @@ def main():
                         uw2 = th2 - max(to2, tc2)
                         lw2 = min(to2, tc2) - tl2
 
-                        # شروط الشمعة الأولى للاستراتيجية الثانية:
-                        # حمراء هابطة، جسمها >= 50%، ديلها العلوي <= 20%، ديلها السفلي <= 30%
+                        lw3 = min(to3, tc3) - tl3
+
+                        # 1. الشمعة الأولى: حمراء هابطة، جسمها >= 50%، ديلها العلوي من 1% إلى 20%، ديلها السفلي من 1% إلى 30%
                         cond1_dir = (tc1 < to1)
                         cond1_body = (b1 >= total_len1 * 0.50)
-                        cond1_uw = (uw1 <= total_len1 * 0.20)
-                        cond1_lw = (lw1 <= total_len1 * 0.30)
+                        cond1_uw = (total_len1 * 0.01 <= uw1 <= total_len1 * 0.20)
+                        cond1_lw = (total_len1 * 0.01 <= lw1 <= total_len1 * 0.30)
                         s2_c1_valid = cond1_dir and cond1_body and cond1_uw and cond1_lw
 
-                        # شروط الشمعة الثانية للاستراتيجية الثانية:
-                        # حمراء هابطة، تكسر الأولى وتغلق تحت ذيلها السفلي، جسمها >= 50%، ديلها العلوي <= 3%, ديلها السفلي <= 30%
+                        # 2. الشمعة الثانية: حمراء هابطة، تكسر الأولى وتغلق تحت ذيلها، جسمها >= 50%، ديل علوي <= 3%، ديل سفلي من 1% إلى 30%
                         cond2_dir = (tc2 < to2)
-                        cond2_break = (tc2 < tl1)  # تغلق تحت ذيل الأولى السفلي
+                        cond2_break = (tc2 < tl1)
                         cond2_body = (b2 >= total_len2 * 0.50)
                         cond2_uw = (uw2 <= total_len2 * 0.03)
-                        cond2_lw = (lw2 <= total_len2 * 0.30)
+                        cond2_lw = (total_len2 * 0.01 <= lw2 <= total_len2 * 0.30)
                         s2_c2_valid = cond2_dir and cond2_break and cond2_body and cond2_uw and cond2_lw
 
-                        # شروط الشمعة الثالثة للاستراتيجية الثانية:
-                        # خضراء، تكسر الشمعة الثانية وتغلق فوقها (فوق قمة الثانية)
+                        # 3. الشمعة الثالثة: خضراء، تكسر الشمعة الثانية وتغلق فوقها، وديلها السفلي داخل نطاق شكل الشمعة الثانية (بين قاع وقمة الشمعة الثانية)
                         cond3_dir = (tc3 > to3)
                         cond3_break = (tc3 > th2)
-                        s2_c3_valid = cond3_dir and cond3_break
+                        cond3_lw_in_c2 = (tl2 <= l3 <= th2)
+                        s2_c3_valid = cond3_dir and cond3_break and cond3_lw_in_c2
 
                         if s2_c1_valid and s2_c2_valid and s2_c3_valid:
-                            key2 = f"{symbol}_{tf}_{s2_c3['time']}_strategy2_new"
+                            key2 = f"{symbol}_{tf}_{s2_c3['time']}_strategy2_updated"
                             if key2 not in sent_alerts:
                                 sent_alerts[key2] = True
-                                msg2 = f"⭐ *تنبيه الاستراتيجية الثانية الجديدة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                msg2 = f"⭐ *تنبيه الاستراتيجية الثانية المعدلة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                 send_telegram_message(msg2)
                                 print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه الاستراتيجية الثانية لـ {symbol.upper()} على فريم {tf}", flush=True)
                         else:
