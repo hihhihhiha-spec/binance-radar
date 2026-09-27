@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategies Radar with Updated Strategy 1 is Active")
+        self.wfile.write(b"Dual Strategies Radar with Updated Strategy 1 Wick is Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,7 +94,7 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - التعديل على الاستراتيجية الأولى] بدأ العمل...", flush=True)
+    print("🟢 [رادار الاستراتيجيتين - التعديل على ذيل الاستراتيجية الأولى] بدأ العمل...", flush=True)
     send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجيتين والشروط المحدثة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
@@ -135,9 +135,8 @@ def main():
 
                     max_c2_u_wick = body2 * 0.05
                     min_c2_l_wick = body2 * 0.05
-                    # شرط أن يكون الذيل السفلي للشمعة الحمراء الثانية خارج نطاق جسم الشمعة الأولى (أقل من قاع جسم الأولى)
-                    c1_body_low = min(o1, cl1)
-                    c2_ok = (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick and l2 < c1_body_low)
+                    # شرط أن يكون الذيل السفلي للشمعة الثانية أسفل ذيل الشمعة الأولى (l2 < l1)
+                    c2_ok = (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick and l2 < l1)
 
                     c3_ok = (cl3 > o3 and (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2))
 
