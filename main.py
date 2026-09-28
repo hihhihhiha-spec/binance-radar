@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategies Radar is Active")
+        self.wfile.write(b"Dual Strategies Radar with Updated Strategy 1 Wick is Active")
     def log_message(self, format, *args):
         pass
 
@@ -64,7 +64,7 @@ def get_top_futures_symbols(limit=500):
 
 BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
 
-def get_klines(symbol, interval, limit=12):
+def get_klines(symbol, interval, limit=10):
     try:
         bybit_tf = BYBIT_INTERVALS.get(interval, '60')
         url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol.upper()}&interval={bybit_tf}&limit={limit}"
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - التصحيح الدقيق] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالشروط الصحيحة والثابتة.")
+    print("🟢 [رادار الاستراتيجيتين - التعديل على ذيل الاستراتيجية الأولى] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجيتين والشروط المحدثة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -116,55 +116,41 @@ def main():
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    candles = get_klines(symbol, tf, limit=12)
-                    if not candles or len(candles) < 7:
+                    candles = get_klines(symbol, tf, limit=10)
+                    if not candles or len(candles) < 5:
                         continue
                     
-                    # ==================== [فحص الاستراتيجية الأولى (التصحيح الدقيق)] ====================
-                    # C1, C2, C3 بشروطهم الأصلية تماماً، مضاف إليهم C4 و C5
-                    c1_s1, c2_s1, c3_s1, c4_s1, c5_s1 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2]
-                    
+                    # ==================== [فحص الاستراتيجية الأولى (المعدلة)] ====================
+                    c1_s1, c2_s1, c3_s1 = candles[-4], candles[-3], candles[-2]
                     o1, h1, l1, cl1 = c1_s1['o'], c1_s1['h'], c1_s1['l'], c1_s1['c']
                     o2, h2, l2, cl2 = c2_s1['o'], c2_s1['h'], c2_s1['l'], c2_s1['c']
                     o3, h3, l3, cl3 = c3_s1['o'], c3_s1['h'], c3_s1['l'], c3_s1['c']
-                    o4, h4, l4, cl4 = c4_s1['o'], c4_s1['h'], c4_s1['l'], c4_s1['c']
-                    o5, h5, l5, cl5 = c5_s1['o'], c5_s1['h'], c5_s1['l'], c5_s1['c']
 
                     body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
                     body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
                     body3, u_wick3, l_wick3 = get_wick_body(o3, h3, l3, cl3)
 
-                    # 1. الشمعة الأولى: حمراء + ذيل علوي > 5%
                     min_c1_u_wick = body1 * 0.05
                     c1_ok = (cl1 < o1 and u_wick1 > min_c1_u_wick)
 
-                    # 2. الشمعة الثانية: حمراء + ذيل علوي <= 5% + ذيل سفلي > 5% + ذيلها السفلي أسفل ذيل الأولى
                     max_c2_u_wick = body2 * 0.05
                     min_c2_l_wick = body2 * 0.05
+                    # شرط أن يكون الذيل السفلي للشمعة الثانية أسفل ذيل الشمعة الأولى (l2 < l1)
                     c2_ok = (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick and l2 < l1)
 
-                    # 3. الشمعة الثالثة: مطابقة لشرطها الأصلي (صاعدة، محصورة بنطاق الأولى، وتخترق الثانية)
                     c3_ok = (cl3 > o3 and (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2))
 
-                    # 4. الشمعة الرابعة: خضراء أو حمراء داخل نطاق الثلاث شموع التي قبلها (C1, C2, C3)
-                    max_range_3 = max(h1, h2, h3)
-                    min_range_3 = min(l1, l2, l3)
-                    c4_ok = (l4 >= min_range_3 and h4 <= max_range_3)
-
-                    # 5. الشمعة الخامسة: خضراء تكسر الشمعة الأولى الحمراء وتغلق فوقها
-                    c5_ok = (cl5 > o5 and cl5 > h1)
-
-                    if c1_ok and c2_ok and c3_ok and c4_ok and c5_ok:
-                        key1 = f"{symbol}_{tf}_{c5_s1['time']}_strategy1"
+                    if c1_ok and c2_ok and c3_ok:
+                        key1 = f"{symbol}_{tf}_{c3_s1['time']}_strategy1"
                         if key1 not in sent_alerts:
                             sent_alerts[key1] = True
                             msg1 = f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg1)
                             print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
                     else:
-                        print(f"    ❌ [استبعاد S1 لـ {symbol.upper()} | {tf}] C1:{c1_ok} | C2:{c2_ok} | C3:{c3_ok} | C4:{c4_ok} | C5:{c5_ok}", flush=True)
+                        print(f"    ❌ [استبعاد S1 لـ {symbol.upper()} | {tf}] C1:{c1_ok} | C2:{c2_ok} | C3:{c3_ok}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية (كما هي تماماً دون أي تغيير)] ====================
+                    # ==================== [فحص الاستراتيجية الثانية (كما هي تماماً)] ====================
                     s2_c1, s2_c2, s2_c3 = candles[-4], candles[-3], candles[-2]
                     
                     to1, th1, tl1, tc1 = s2_c1['o'], s2_c1['h'], s2_c1['l'], s2_c1['c']
@@ -182,6 +168,8 @@ def main():
                         b2 = abs(to2 - tc2)
                         uw2 = th2 - max(to2, tc2)
                         lw2 = min(to2, tc2) - tl2
+
+                        lw3 = min(to3, tc3) - tl3
 
                         cond1_dir = (tc1 < to1)
                         cond1_body = (b1 >= total_len1 * 0.50)
