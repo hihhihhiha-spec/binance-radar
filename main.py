@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Three Strategies Radar is Active")
+        self.wfile.write(b"Dual Strategies Radar is Active")
     def log_message(self, format, *args):
         pass
 
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيات الثلاث] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجيات الثلاث.")
+    print("🟢 [رادار الاستراتيجيات - التصحيح الدقيق] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالشروط الصحيحة والثابتة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -120,7 +120,7 @@ def main():
                     if not candles or len(candles) < 7:
                         continue
                     
-                    # ==================== [فحص الاستراتيجية الأولى (كما هي تماماً)] ====================
+                    # ==================== [فحص الاستراتيجية الأولى] ====================
                     c1_s1, c2_s1, c3_s1, c4_s1, c5_s1 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2]
                     
                     o1, h1, l1, cl1 = c1_s1['o'], c1_s1['h'], c1_s1['l'], c1_s1['c']
@@ -154,45 +154,45 @@ def main():
                             msg1 = f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg1)
                             print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
+                    else:
+                        print(f"    ❌ [استبعاد S1 لـ {symbol.upper()} | {tf}] C1:{c1_ok} | C2:{c2_ok} | C3:{c3_ok} | C4:{c4_ok} | C5:{c5_ok}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثانية (كما هي تماماً)] ====================
+                    # ==================== [فحص الاستراتيجية الثانية] ====================
                     s2_c1, s2_c2, s2_c3 = candles[-4], candles[-3], candles[-2]
                     
                     to1, th1, tl1, tc1 = s2_c1['o'], s2_c1['h'], s2_c1['l'], s2_c1['c']
                     to2, th2, tl2, tc2 = s2_c2['o'], s2_c2['h'], s2_c2['l'], s2_c2['c']
                     to3, th3, tl3, tc3 = s2_c3['o'], s2_c3['h'], s2_c3['l'], s2_c3['c']
 
-                    total_len1_s2 = th1 - tl1
-                    total_len2_s2 = th2 - tl2
+                    total_len1 = th1 - tl1
+                    total_len2 = th2 - tl2
 
-                    if total_len1_s2 > 0 and total_len2_s2 > 0:
-                        b1_s2 = abs(to1 - tc1)
-                        uw1_s2 = th1 - max(to1, tc1)
-                        lw1_s2 = min(to1, tc1) - tl1
+                    if total_len1 > 0 and total_len2 > 0:
+                        b1 = abs(to1 - tc1)
+                        uw1 = th1 - max(to1, tc1)
+                        lw1 = min(to1, tc1) - tl1
 
-                        b2_s2 = abs(to2 - tc2)
-                        uw2_s2 = th2 - max(to2, tc2)
-                        lw2_s2 = min(to2, tc2) - tl2
+                        b2 = abs(to2 - tc2)
+                        uw2 = th2 - max(to2, tc2)
+                        lw2 = min(to2, tc2) - tl2
 
                         cond1_dir = (tc1 < to1)
-                        cond1_body = (b1_s2 >= total_len1_s2 * 0.50)
-                        cond1_uw = (total_len1_s2 * 0.01 <= uw1_s2 <= total_len1_s2 * 0.20)
-                        cond1_lw = (total_len1_s2 * 0.01 <= lw1_s2 <= total_len1_s2 * 0.30)
+                        cond1_body = (b1 >= total_len1 * 0.50)
+                        cond1_uw = (total_len1 * 0.01 <= uw1 <= total_len1 * 0.20)
+                        cond1_lw = (total_len1 * 0.01 <= lw1 <= total_len1 * 0.30)
                         s2_c1_valid = cond1_dir and cond1_body and cond1_uw and cond1_lw
 
                         cond2_dir = (tc2 < to2)
                         cond2_break = (tc2 < tl1)
-                        cond2_body = (b2_s2 >= total_len2_s2 * 0.50)
-                        cond2_uw = (uw2_s2 <= total_len2_s2 * 0.03)
-                        cond2_lw = (total_len2_s2 * 0.01 <= lw2_s2 <= total_len2_s2 * 0.30)
+                        cond2_body = (b2 >= total_len2 * 0.50)
+                        cond2_uw = (uw2 <= total_len2 * 0.03)
+                        cond2_lw = (total_len2 * 0.01 <= lw2 <= total_len2 * 0.30)
                         s2_c2_valid = cond2_dir and cond2_break and cond2_body and cond2_uw and cond2_lw
 
                         cond3_dir = (tc3 > to3)
                         cond3_break = (tc3 > th2)
-                        cond3_lw_in_c2 = (tl2 <= l3 <= th2) # ملاحظة: l3 هنا تعني tl3
-                        # تصحيح دقيق لضمان عدم حدوث خطأ برمجي:
-                        cond3_lw_in_c2_fixed = (tl2 <= tl3 <= th2)
-                        s2_c3_valid = cond3_dir and cond3_break and cond3_lw_in_c2_fixed
+                        cond3_lw_in_c2 = (tl2 <= tl3 <= th2)
+                        s2_c3_valid = cond3_dir and cond3_break and cond3_lw_in_c2
 
                         if s2_c1_valid and s2_c2_valid and s2_c3_valid:
                             key2 = f"{symbol}_{tf}_{s2_c3['time']}_strategy2_updated"
@@ -201,9 +201,12 @@ def main():
                                 msg2 = f"⭐ *تنبيه الاستراتيجية الثانية*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                 send_telegram_message(msg2)
                                 print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه الاستراتيجية الثانية لـ {symbol.upper()} على فريم {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1_Valid:{s2_c1_valid} | C2_Valid:{s2_c2_valid} | C3_Valid:{s2_c3_valid}", flush=True)
+                    else:
+                        print(f"    ⚠️ [استبعاد S2] طول الشموع صفرية لـ {symbol.upper()} على {tf}", flush=True)
 
-                    # ==================== [فحص الاستراتيجية الثالثة الجديدة] ====================
-                    # تتطلب 5 شموع متتالية: C1, C2, C3, C4, C5
+                    # ==================== [فحص الاستراتيجية الثالثة] ====================
                     s3_c1, s3_c2, s3_c3, s3_c4, s3_c5 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2]
                     
                     so1, sh1, sl1, sc1 = s3_c1['o'], s3_c1['h'], s3_c1['l'], s3_c1['c']
@@ -212,10 +215,10 @@ def main():
                     so4, sh4, sl4, sc4 = s3_c4['o'], s3_c4['h'], s3_c4['l'], s3_c4['c']
                     so5, sh5, sl5, sc5 = s3_c5['o'], s3_c5['h'], s3_c5['l'], s3_c5['c']
 
-                    t_len1 = sh1 - sl1
-                    t_len2 = sh2 - sl2
+                    t_len1_s3 = sh1 - sl1
+                    t_len2_s3 = sh2 - sl2
 
-                    if t_len1 > 0 and t_len2 > 0:
+                    if t_len1_s3 > 0 and t_len2_s3 > 0:
                         b_s3_1 = abs(so1 - sc1)
                         uw_s3_1 = sh1 - max(so1, sc1)
                         lw_s3_1 = min(so1, sc1) - sl1
@@ -226,37 +229,30 @@ def main():
 
                         lw_s3_3 = min(so3, sc3) - sl3
 
-                        # الشمعة الأولى: الجسم 50%-70%، الديل السفلي 20%-35%، الديل العلوي 5%-15%
                         s3_c1_ok = (
-                            (t_len1 * 0.50 <= b_s3_1 <= t_len1 * 0.70) and
-                            (t_len1 * 0.20 <= lw_s3_1 <= t_len1 * 0.35) and
-                            (t_len1 * 0.05 <= uw_s3_1 <= t_len1 * 0.15)
+                            (t_len1_s3 * 0.50 <= b_s3_1 <= t_len1_s3 * 0.70) and
+                            (t_len1_s3 * 0.20 <= lw_s3_1 <= t_len1_s3 * 0.35) and
+                            (t_len1_s3 * 0.05 <= uw_s3_1 <= t_len1_s3 * 0.15)
                         )
 
-                        # الشمعة الثانية: حمراء، الجسم 50%، الديل السفلي 20%-35%، الديل العلوي 5%-15%
-                        # وسعر الإغلاق يكسر قاع الشمعة الأولى واغلق تحته تماماً (sc2 < sl1)
                         s3_c2_ok = (
                             sc2 < so2 and
                             sc2 < sl1 and
-                            (t_len2 * 0.45 <= b_s3_2 <= t_len2 * 0.55) and
-                            (t_len2 * 0.20 <= lw_s3_2 <= t_len2 * 0.35) and
-                            (t_len2 * 0.05 <= uw_s3_2 <= t_len2 * 0.15)
+                            (t_len2_s3 * 0.45 <= b_s3_2 <= t_len2_s3 * 0.55) and
+                            (t_len2_s3 * 0.20 <= lw_s3_2 <= t_len2_s3 * 0.35) and
+                            (t_len2_s3 * 0.05 <= uw_s3_2 <= t_len2_s3 * 0.15)
                         )
 
-                        # الشمعة الثالثة: خضراء ابتلاعية، تفتح عند الثانية وتغلق رسميا أعلى من أعلى نقطة في الشمعة الثانية (sc3 > sh2)
-                        # والديل السفلي للشمعة الثالثة أقصر من الديل السفلي لشمعة الثانية (lw_s3_3 < lw_s3_2)
                         s3_c3_ok = (
                             sc3 > so3 and
                             sc3 > sh2 and
                             lw_s3_3 < lw_s3_2
                         )
 
-                        # الشمعة الرابعة: داخل النطاق (بين أدنى قاع وأعلى قمة للشموع الثلاث الأولى)
                         min_rng_s3 = min(sl1, sl2, sl3)
                         max_rng_s3 = max(sh1, sh2, sh3)
                         s3_c4_ok = (sl4 >= min_rng_s3 and sh4 <= max_rng_s3)
 
-                        # الشمعة الخامسة: تكسر وتغلق فوق النطاق (أو فوق قمة الشمعة الأولى)
                         s3_c5_ok = (sc5 > so5 and sc5 > sh1)
 
                         if s3_c1_ok and s3_c2_ok and s3_c3_ok and s3_c4_ok and s3_c5_ok:
@@ -266,6 +262,8 @@ def main():
                                 msg3 = f"⭐ *تنبيه الاستراتيجية الثالثة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                 send_telegram_message(msg3)
                                 print(f"🚨 [إشارة مطابقة 3] تم إرسال تنبيه الاستراتيجية الثالثة لـ {symbol.upper()} على فريم {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S3 لـ {symbol.upper()} | {tf}] C1:{s3_c1_ok} | C2:{s3_c2_ok} | C3:{s3_c3_ok} | C4:{s3_c4_ok} | C5:{s3_c5_ok}", flush=True)
 
                     time.sleep(0.005)
 
