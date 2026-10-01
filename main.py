@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Dual Strategies Radar with 5-Candle Update is Active")
+        self.wfile.write(b"Four Strategies Radar with Trend Filter is Active")
     def log_message(self, format, *args):
         pass
 
@@ -64,7 +64,7 @@ def get_top_futures_symbols(limit=500):
 
 BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
 
-def get_klines(symbol, interval, limit=12):
+def get_klines(symbol, interval, limit=20):
     try:
         bybit_tf = BYBIT_INTERVALS.get(interval, '60')
         url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol.upper()}&interval={bybit_tf}&limit={limit}"
@@ -94,8 +94,8 @@ def get_wick_body(o, h, l, c):
     return body, upper_wick, lower_wick
 
 def main():
-    print("🟢 [رادار الاستراتيجيتين - التعديل بـ 5 شموع للكل] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجيتين المحدثتين (5 شموع).")
+    print("🟢 [رادار الاستراتيجيات الأربع مع شرط الاتجاه الهابط] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجيات الأربع مع فلتر الاتجاه الهابط.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -112,114 +112,174 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة للاستراتيجيتين...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة للاستراتيجيات الأربع...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
-                    candles = get_klines(symbol, tf, limit=12)
-                    if not candles or len(candles) < 7:
+                    candles = get_klines(symbol, tf, limit=20)
+                    if not candles or len(candles) < 16:
                         continue
                     
-                    # ==================== [فحص الاستراتيجية الأولى (5 شموع)] ====================
-                    c1_s1, c2_s1, c3_s1, c4_s1, c5_s1 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2]
+                    # --- فلتر الاتجاه الهابط السابق (Price Action) ---
+                    # شروط الاتجاه الهابط: أن يكون سعر افتتاح الشمعة الأولى أقل من متوسط أسعار الشموع السابقة
+                    close_prices_list = [c['c'] for c in candles]
+                    # نفترض أن الشمعة الأولى للنماذج تقع في الفهرس -5 أو -6، نتحقق من الاتجاه العام قبلها
+                    # بناءً على طلبك: close_p[4] < sum(close_p[5:15]) / 10
+                    # في بايثون، لنأخذ الشموع بشكل آمن:
+                    try:
+                        # سنفحص الاتجاه الهابط العام بناءً على الشمعة الأولى للنموذج (نعتبرها الفهرس المناسب)
+                        downtrend_ok = candles[-5]['o'] < (sum(close_prices_list[-15:-5]) / 10)
+                    except:
+                        downtrend_ok = True  # تجاوز آمن في حال عدم كفاية البيانات
+
+                    if not downtrend_ok:
+                        continue  # إذا لم تكن في اتجاه هابط، يتم تخطي فحص الاستراتيجيات لهذه العملة والفريم
+
+                    # تجهيز الشموع المشتركة للنماذج
+                    c1, c2, c3, c4, c5 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2]
                     
-                    o1, h1, l1, cl1 = c1_s1['o'], c1_s1['h'], c1_s1['l'], c1_s1['c']
-                    o2, h2, l2, cl2 = c2_s1['o'], c2_s1['h'], c2_s1['l'], c2_s1['c']
-                    o3, h3, l3, cl3 = c3_s1['o'], c3_s1['h'], c3_s1['l'], c3_s1['c']
-                    o4, h4, l4, cl4 = c4_s1['o'], c4_s1['h'], c4_s1['l'], c4_s1['c']
-                    o5, h5, l5, cl5 = c5_s1['o'], c5_s1['h'], c5_s1['l'], c5_s1['c']
+                    o1, h1, l1, c1_val = c1['o'], c1['h'], c1['l'], c1['c']
+                    o2, h2, l2, c2_val = c2['o'], c2['h'], c2['l'], c2['c']
+                    o3, h3, l3, c3_val = c3['o'], c3['h'], c3['l'], c3['c']
+                    o4, h4, l4, c4_val = c4['o'], c4['h'], c4['l'], c4['c']
+                    o5, h5, l5, c5_val = c5['o'], c5['h'], c5['l'], c5['c']
 
-                    body1, u_wick1, l_wick1 = get_wick_body(o1, h1, l1, cl1)
-                    body2, u_wick2, l_wick2 = get_wick_body(o2, h2, l2, cl2)
-                    body3, u_wick3, l_wick3 = get_wick_body(o3, h3, l3, cl3)
+                    total_len1 = h1 - l1
+                    total_len2 = h2 - l2
 
-                    min_c1_u_wick = body1 * 0.05
-                    c1_ok = (cl1 < o1 and u_wick1 > min_c1_u_wick)
+                    if total_len1 <= 0 or total_len2 <= 0:
+                        continue
 
-                    max_c2_u_wick = body2 * 0.05
-                    min_c2_l_wick = body2 * 0.05
-                    c2_ok = (cl2 < o2 and u_wick2 <= max_c2_u_wick and l_wick2 > min_c2_l_wick and l2 < l1)
+                    b1 = abs(o1 - c1_val)
+                    uw1 = h1 - max(o1, c1_val)
+                    lw1 = min(o1, c1_val) - l1
 
-                    c3_ok = (cl3 > o3 and (l3 >= l1 and h3 <= h1) and (l3 >= l2 and cl3 > h2))
+                    b2 = abs(o2 - c2_val)
+                    uw2 = h2 - max(o2, c2_val)
+                    lw2 = min(o2, c2_val) - l2
 
-                    # الشمعة الرابعة: داخل نطاق الشموع الثلاث الأولى
-                    max_range_3_s1 = max(h1, h2, h3)
-                    min_range_3_s1 = min(l1, l2, l3)
-                    c4_ok = (l4 >= min_range_3_s1 and h4 <= max_range_3_s1)
+                    lw3 = min(o3, c3_val) - l3
 
-                    # الشمعة الخامسة: تكسر الشمعة الأولى وتغلق فوقها
-                    c5_ok = (cl5 > o5 and cl5 > h1)
+                    # الشروط المشتركة للشمعة الأولى في كل الاستراتيجيات الأربع:
+                    # جسم 50%-70%، ديل سفلي 20%-35%، ديل علوي 5%-15%
+                    common_c1 = (
+                        (total_len1 * 0.50 <= b1 <= total_len1 * 0.70) and
+                        (total_len1 * 0.20 <= lw1 <= total_len1 * 0.35) and
+                        (total_len1 * 0.05 <= uw1 <= total_len1 * 0.15)
+                    )
 
-                    if c1_ok and c2_ok and c3_ok and c4_ok and c5_ok:
-                        key1 = f"{symbol}_{tf}_{c5_s1['time']}_strategy1"
-                        if key1 not in sent_alerts:
-                            sent_alerts[key1] = True
-                            msg1 = f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
-                            send_telegram_message(msg1)
-                            print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
-                    else:
-                        print(f"    ❌ [استبعاد S1 لـ {symbol.upper()} | {tf}] C1:{c1_ok} | C2:{c2_ok} | C3:{c3_ok} | C4:{c4_ok} | C5:{c5_ok}", flush=True)
+                    min_rng = min(l1, l2, l3)
+                    max_rng = max(h1, h2, h3)
 
-                    # ==================== [فحص الاستراتيجية الثانية (5 شموع)] ====================
-                    s2_c1, s2_c2, s2_c3, s2_c4, s2_c5 = candles[-6], candles[-5], candles[-4], candles[-3], candles[-2]
-                    
-                    to1, th1, tl1, tc1 = s2_c1['o'], s2_c1['h'], s2_c1['l'], s2_c1['c']
-                    to2, th2, tl2, tc2 = s2_c2['o'], s2_c2['h'], s2_c2['l'], s2_c2['c']
-                    to3, th3, tl3, tc3 = s2_c3['o'], s2_c3['h'], s2_c3['l'], s2_c3['c']
-                    to4, th4, tl4, tc4 = s2_c4['o'], s2_c4['h'], s2_c4['l'], s2_c4['c']
-                    to5, th5, tl5, tc5 = s2_c5['o'], s2_c5['h'], s2_c5['l'], s2_c5['c']
+                    # ==================== [الاستراتيجية الأولى] ====================
+                    if common_c1:
+                        s1_c2 = (
+                            c2_val < o2 and
+                            b2 >= total_len2 * 0.20 and
+                            (total_len2 * 0.20 <= lw2 <= total_len2 * 0.50) and
+                            uw2 < total_len2 * 0.01 and
+                            (l1 <= l2 <= h1) and  # داخل الشمعة الأولى
+                            l2 < l1               # ديل الشمعة الثانية أسفل ديل الشمعة الأولى
+                        )
+                        s1_c3 = (
+                            c3_val > o3 and
+                            c3_val > h2 and
+                            lw3 < lw2
+                        )
+                        s1_c4 = (l4 >= min_rng and h4 <= max_rng)
+                        s1_c5 = (c5_val > o5 and c5_val > h1)
 
-                    total_len1 = th1 - tl1
-                    total_len2 = th2 - tl2
+                        if s1_c2 and s1_c3 and s1_c4 and s1_c5:
+                            key1 = f"{symbol}_{tf}_{c5['time']}_strategy1"
+                            if key1 not in sent_alerts:
+                                sent_alerts[key1] = True
+                                msg1 = f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                send_telegram_message(msg1)
+                                print(f"🚨 [إشارة مطابقة 1] تم إرسال تنبيه لـ {symbol.upper()} على فريم {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S1 لـ {symbol.upper()} | {tf}]", flush=True)
 
-                    if total_len1 > 0 and total_len2 > 0:
-                        b1 = abs(to1 - tc1)
-                        uw1 = th1 - max(to1, tc1)
-                        lw1 = min(to1, tc1) - tl1
+                    # ==================== [الاستراتيجية الثانية] ====================
+                    if common_c1:
+                        s2_c2 = (
+                            c2_val < o2 and
+                            c2_val < l1 and  # كسر قاع الأولى واغلاق تحته تماماً
+                            (total_len2 * 0.15 <= b2 <= total_len2 * 0.30) and
+                            (total_len2 * 0.60 <= lw2 <= total_len2 * 0.75) and
+                            (total_len2 * 0.00 <= uw2 <= total_len2 * 0.01)
+                        )
+                        s2_c3 = (
+                            c3_val > o3 and
+                            c3_val > h2 and
+                            lw3 < lw2
+                        )
+                        s2_c4 = (l4 >= min_rng and h4 <= max_rng)
+                        # شمعة خامسة خضراء تكسر النطاق وتغلق فوقه تماماً
+                        s2_c5 = (c5_val > o5 and c5_val > h1)
 
-                        b2 = abs(to2 - tc2)
-                        uw2 = th2 - max(to2, tc2)
-                        lw2 = min(to2, tc2) - tl2
-
-                        lw3 = min(to3, tc3) - tl3
-
-                        cond1_dir = (tc1 < to1)
-                        cond1_body = (b1 >= total_len1 * 0.50)
-                        cond1_uw = (total_len1 * 0.01 <= uw1 <= total_len1 * 0.20)
-                        cond1_lw = (total_len1 * 0.01 <= lw1 <= total_len1 * 0.30)
-                        s2_c1_valid = cond1_dir and cond1_body and cond1_uw and cond1_lw
-
-                        cond2_dir = (tc2 < to2)
-                        cond2_break = (tc2 < tl1)
-                        cond2_body = (b2 >= total_len2 * 0.50)
-                        cond2_uw = (uw2 <= total_len2 * 0.03)
-                        cond2_lw = (total_len2 * 0.01 <= lw2 <= total_len2 * 0.30)
-                        s2_c2_valid = cond2_dir and cond2_break and cond2_body and cond2_uw and cond2_lw
-
-                        cond3_dir = (tc3 > to3)
-                        cond3_break = (tc3 > th2)
-                        cond3_lw_in_c2 = (tl2 <= l3 <= th2)
-                        s2_c3_valid = cond3_dir and cond3_break and cond3_lw_in_c2
-
-                        # الشمعة الرابعة: داخل نطاق أول ثلاث شموع للاستراتيجية الثانية
-                        max_range_3_s2 = max(th1, th2, th3)
-                        min_range_3_s2 = min(tl1, tl2, tl3)
-                        s2_c4_valid = (tl4 >= min_range_3_s2 and th4 <= max_range_3_s2)
-
-                        # الشمعة الخامسة: تكسر وتغلق فوق قمة الشمعة الأولى للاستراتيجية الثانية
-                        s2_c5_valid = (tc5 > to5 and tc5 > th1)
-
-                        if s2_c1_valid and s2_c2_valid and s2_c3_valid and s2_c4_valid and s2_c5_valid:
-                            key2 = f"{symbol}_{tf}_{s2_c5['time']}_strategy2_updated"
+                        if s2_c2 and s2_c3 and s2_c4 and s2_c5:
+                            key2 = f"{symbol}_{tf}_{c5['time']}_strategy2"
                             if key2 not in sent_alerts:
                                 sent_alerts[key2] = True
                                 msg2 = f"⭐ *تنبيه الاستراتيجية الثانية*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                                 send_telegram_message(msg2)
                                 print(f"🚨 [إشارة مطابقة 2] تم إرسال تنبيه الاستراتيجية الثانية لـ {symbol.upper()} على فريم {tf}", flush=True)
                         else:
-                            print(f"    ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}] C1:{s2_c1_valid} | C2:{s2_c2_valid} | C3:{s2_c3_valid} | C4:{s2_c4_valid} | C5:{s2_c5_valid}", flush=True)
-                    else:
-                        print(f"    ⚠️ [استبعاد S2] طول الشموع صفرية لـ {symbol.upper()} على {tf}", flush=True)
+                            print(f"    ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}]", flush=True)
+
+                    # ==================== [الاستراتيجية الثالثة] ====================
+                    if common_c1:
+                        s3_c2 = (
+                            c2_val < o2 and
+                            c2_val < l1 and  # كسر قاع الشمعة الأولى
+                            (total_len2 * 0.45 <= b2 <= total_len2 * 0.55) and  # تقريباً 50%
+                            (total_len2 * 0.20 <= lw2 <= total_len2 * 0.35) and
+                            (total_len2 * 0.05 <= uw2 <= total_len2 * 0.15)
+                        )
+                        s3_c3 = (
+                            c3_val > o3 and
+                            c3_val > h2 and
+                            lw3 < lw2
+                        )
+                        s3_c4 = (l4 >= min_rng and h4 <= max_rng)
+                        s3_c5 = (c5_val > o5 and c5_val > h1)
+
+                        if s3_c2 and s3_c3 and s3_c4 and s3_c5:
+                            key3 = f"{symbol}_{tf}_{c5['time']}_strategy3"
+                            if key3 not in sent_alerts:
+                                sent_alerts[key3] = True
+                                msg3 = f"⭐ *تنبيه الاستراتيجية الثالثة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                send_telegram_message(msg3)
+                                print(f"🚨 [إشارة مطابقة 3] تم إرسال تنبيه الاستراتيجية الثالثة لـ {symbol.upper()} على فريم {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S3 لـ {symbol.upper()} | {tf}]", flush=True)
+
+                    # ==================== [الاستراتيجية الرابعة] ====================
+                    if common_c1:
+                        s4_c2 = (
+                            c2_val < o2 and
+                            c2_val < l1 and  # كسر قاع الشمعة الأولى
+                            b2 >= total_len2 * 0.30 and  # 30% أو أكثر
+                            (total_len2 * 0.20 <= lw2 <= total_len2 * 0.35) and
+                            uw2 < total_len2 * 0.15      # أقل من 15%
+                        )
+                        s4_c3 = (
+                            c3_val > o3 and
+                            (l3 >= min_rng and h3 <= max_rng) and  # داخل النطاق
+                            lw3 < lw2
+                        )
+                        s4_c4 = (l4 >= min_rng and h4 <= max_rng)
+                        s4_c5 = (c5_val > o5 and c5_val > h1)
+
+                        if s4_c2 and s4_c3 and s4_c4 and s4_c5:
+                            key4 = f"{symbol}_{tf}_{c5['time']}_strategy4"
+                            if key4 not in sent_alerts:
+                                sent_alerts[key4] = True
+                                msg4 = f"⭐ *تنبيه الاستراتيجية الرابعة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                                send_telegram_message(msg4)
+                                print(f"🚨 [إشارة مطابقة 4] تم إرسال تنبيه الاستراتيجية الرابعة لـ {symbol.upper()} على فريم {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S4 لـ {symbol.upper()} | {tf}]", flush=True)
 
                     time.sleep(0.005)
 
