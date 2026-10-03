@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Six Strategies Radar with Flexible Accumulation is Active")
+        self.wfile.write(b"Six Strategies Radar with Full Logging is Active")
     def log_message(self, format, *args):
         pass
 
@@ -88,8 +88,8 @@ def get_klines(symbol, interval, limit=20):
     return []
 
 def main():
-    print("🟢 [رادار الـ 6 استراتيجيات المتطور] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بـ 6 استراتيجيات (تشمل الاستراتيجيات الصارمة + الاستراتيجيات المرنة والتجميع الديناميكي).")
+    print("🟢 [رادار الـ 6 استراتيجيات مع الطباعة المفصلة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بـ 6 استراتيجيات (مع تفعيل الطباعة الكاملة في السجلات).")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -158,7 +158,7 @@ def main():
                     min_rng = min(l1, l2, l3)
                     max_rng = max(h1, h2, h3)
 
-                    # ==================== [الاستراتيجية الأولى - كما هي] ====================
+                    # ==================== [الاستراتيجية الأولى] ====================
                     if common_c1:
                         s1_c2 = (
                             c2_val < o2 and
@@ -182,8 +182,10 @@ def main():
                                 sent_alerts[key1] = True
                                 send_telegram_message(f"⭐ *تنبيه الاستراتيجية الأولى*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
                                 print(f"🚨 [إشارة مطابقة 1] {symbol.upper()} | {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S1 لـ {symbol.upper()} | {tf}]", flush=True)
 
-                    # ==================== [الاستراتيجية الثانية - كما هي] ====================
+                    # ==================== [الاستراتيجية الثانية] ====================
                     if common_c1:
                         s2_c2 = (
                             c2_val < o2 and
@@ -206,8 +208,10 @@ def main():
                                 sent_alerts[key2] = True
                                 send_telegram_message(f"⭐ *تنبيه الاستراتيجية الثانية*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
                                 print(f"🚨 [إشارة مطابقة 2] {symbol.upper()} | {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S2 لـ {symbol.upper()} | {tf}]", flush=True)
 
-                    # ==================== [الاستراتيجية الثالثة - كما هي] ====================
+                    # ==================== [الاستراتيجية الثالثة] ====================
                     if common_c1:
                         s3_c2 = (
                             c2_val < o2 and
@@ -230,8 +234,10 @@ def main():
                                 sent_alerts[key3] = True
                                 send_telegram_message(f"⭐ *تنبيه الاستراتيجية الثالثة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
                                 print(f"🚨 [إشارة مطابقة 3] {symbol.upper()} | {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S3 لـ {symbol.upper()} | {tf}]", flush=True)
 
-                    # ==================== [الاستراتيجية الرابعة - كما هي] ====================
+                    # ==================== [الاستراتيجية الرابعة] ====================
                     if common_c1:
                         s4_c2 = (
                             c2_val < o2 and
@@ -257,10 +263,12 @@ def main():
                                 sent_alerts[key4] = True
                                 send_telegram_message(f"⭐ *تنبيه الاستراتيجية الرابعة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
                                 print(f"🚨 [إشارة مطابقة 4] {symbol.upper()} | {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S4 لـ {symbol.upper()} | {tf}]", flush=True)
 
-                    # ==================== [الاستراتيجية الخامسة الجديدة - مرنة الأجسام والديول] ====================
+                    # ==================== [الاستراتيجية الخامسة] ====================
                     if common_c1:
-                        s5_c2 = (c2_val < o2 and c2_val < l1) # كسر القاع بدون شروط قيود ديول صارمة
+                        s5_c2 = (c2_val < o2 and c2_val < l1)
                         s5_c3 = (c3_val > o3 and (min_rng <= l3 and h3 <= max_rng))
                         s5_c4 = (min_rng <= l4 and h4 <= max_rng)
                         s5_c5 = (c5_val > o5 and c5_val > max_rng)
@@ -271,15 +279,16 @@ def main():
                                 sent_alerts[key5] = True
                                 send_telegram_message(f"⭐ *تنبيه الاستراتيجية الخامسة (مرنة)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
                                 print(f"🚨 [إشارة مطابقة 5] {symbol.upper()} | {tf}", flush=True)
+                        else:
+                            print(f"    ❌ [استبعاد S5 لـ {symbol.upper()} | {tf}]", flush=True)
 
-                    # ==================== [الاستراتيجية السادسة الجديدة - التجميع الديناميكي والكسر الحر] ====================
+                    # ==================== [الاستراتيجية السادسة] ====================
                     if common_c1 and len(candles) >= 8:
                         s6_c2 = (candles[-5]['c'] < candles[-5]['o'] and candles[-5]['c'] < candles[-6]['l'])
                         if s6_c2:
                             s6_min = min(candles[-6]['l'], candles[-5]['l'])
                             s6_max = max(candles[-6]['h'], candles[-5]['h'])
                             
-                            # جميع الشموع الوسيطة بعد C2 تظل داخل نطاق التجميع بغض النظر عن عددها
                             intermediate_candles = candles[-4:-2]
                             all_inside = all(s6_min <= c['l'] and c['h'] <= s6_max for c in intermediate_candles)
                             
@@ -290,8 +299,10 @@ def main():
                                 key6 = f"{symbol}_{tf}_{latest_c['time']}_strategy6"
                                 if key6 not in sent_alerts:
                                     sent_alerts[key6] = True
-                                    send_telegram_message(f"⭐ *تنبيه الاستراتيجية السادسة (التجميع المرن والكسر الحر)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
+                                    send_telegram_message(f"⭐ *تنبيه الاستراتيجية السادسة (التجميع المرن)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`")
                                     print(f"🚨 [إشارة مطابقة 6] {symbol.upper()} | {tf}", flush=True)
+                            else:
+                                print(f"    ❌ [استبعاد S6 لـ {symbol.upper()} | {tf}]", flush=True)
 
                     time.sleep(0.005)
 
