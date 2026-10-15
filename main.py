@@ -59,27 +59,32 @@ def get_klines(symbol, interval, limit=25):
         bybit_tf = BYBIT_INTERVALS.get(interval, '60')
         url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol.upper()}&interval={bybit_tf}&limit={limit}"
         response = requests.get(url, headers=HEADERS, timeout=5)
-        if response.status_code == 200:
-            res_json = response.json()
-            if res_json.get("retCode") == 0:
-                raw_data = res_json.get("result", {}).get("list", [])
-                candles = []
-                for item in reversed(raw_data):
-                    candles.append({
-                        'time': int(item[0]),
-                        'o': float(item[1]),
-                        'h': float(item[2]),
-                        'l': float(item[3]),
-                        'c': float(item[4])
-                    })
-                return candles
-    except:
-        pass
+        
+        # طباعة حالة الاتصال لكل طلب لنرى هل ينجح أم يتم حظره
+        if response.status_code != 200:
+            print(f"⚠️ [تحذير اتصال] {symbol.upper()} | {interval} -> كود الاستجابة: {response.status_code}", flush=True)
+            return []
+
+        res_json = response.json()
+        if res_json.get("retCode") == 0:
+            raw_data = res_json.get("result", {}).get("list", [])
+            candles = []
+            for item in reversed(raw_data):
+                candles.append({
+                    'time': int(item[0]),
+                    'o': float(item[1]),
+                    'h': float(item[2]),
+                    'l': float(item[3]),
+                    'c': float(item[4])
+                })
+            return candles
+    except Exception as e:
+        print(f"❌ [خطأ شبكة] {symbol.upper()} | {interval} -> {e}", flush=True)
     return []
 
 def main():
-    print("🟢 [رادار فحص العملات مع أسباب الاستبعاد] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار مع تفاصيل أسباب الاستبعاد.")
+    print("🟢 [رادار الفحص والتشخيص الحي] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار مع تفعيل تشخيص الاتصال والشروط.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = EXPLICIT_SYMBOLS
@@ -87,7 +92,7 @@ def main():
 
     while True:
         try:
-            print(f"\n🔄 [بدء الدورة رقم {cycle}] فحص {len(symbols)} عملة...", flush=True)
+            print(f"\n🔄 [بدء الدورة رقم {cycle}] جاري فحص {len(symbols)} عملة...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
@@ -103,7 +108,7 @@ def main():
                         is_far_from_peak = True
 
                     if not is_far_from_peak:
-                        print(f"❌ [{symbol.upper()} | {tf}] استبعاد: قريبة جداً من القمة", flush=True)
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: قريبة جداً من القمة", flush=True)
                         continue
 
                     c1, c2, c3 = candles[-6], candles[-5], candles[-4]
@@ -135,7 +140,7 @@ def main():
                         (total_len1 * 0.01 <= uw1 <= total_len1 * 0.15)
                     )
                     if not cond_c1:
-                        print(f"❌ [{symbol.upper()} | {tf}] استبعاد: مواصفات الشمعة الأولى (C1) غير مطابقة", flush=True)
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: مواصفات الشمعة الأولى (C1) غير مطابقة", flush=True)
                         continue
 
                     # 3. فحص الشمعة الثانية C2
@@ -147,7 +152,7 @@ def main():
                         (total_len2 * 0.01 <= uw2 <= total_len2 * 0.15)
                     )
                     if not cond_c2:
-                        print(f"❌ [{symbol.upper()} | {tf}] استبعاد: الشمعة الثانية (C2) لم تكسر القاع أو مقاييسها خاطئة", flush=True)
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: الشمعة الثانية (C2) لم تكسر القاع أو مقاييسها خاطئة", flush=True)
                         continue
 
                     # 4. فحص الشمعة الثالثة C3
@@ -157,7 +162,7 @@ def main():
                         lw3 < lw2
                     )
                     if not cond_c3:
-                        print(f"❌ [{symbol.upper()} | {tf}] استبعاد: الشمعة الثالثة (C3) لا تووافق الشروط", flush=True)
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: الشمعة الثالثة (C3) لا توافق الشروط", flush=True)
                         continue
 
                     # 5. التجميع والكسر
@@ -184,7 +189,7 @@ def main():
                             send_telegram_message(msg)
                             print(f"🚨 [إشارة مطابقة ناجحة وتم الإرسال] {symbol.upper()} | {tf}", flush=True)
                     else:
-                        print(f"❌ [{symbol.upper()} | {tf}] استبعاد: شروط التجميع أو الكسر النهائي غير مطابقة", flush=True)
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: شروط التجميع أو الكسر النهائي غير مطابقة", flush=True)
 
                     time.sleep(0.005)
 
