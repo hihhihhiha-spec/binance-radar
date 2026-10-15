@@ -6,10 +6,10 @@ import requests
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- تفعيل الطباعة الفورية القصوى ---
+# --- فرض الطباعة الفورية اللحظية على الحساب الجديد ---
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
-print("🚀 [بدء التشغيل] السكريبت يعمل الآن...", flush=True)
+print("🔥 [إقلاع النظام] بدأ تشغيل السكريبت على الحساب الجديد...", flush=True)
 
 TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
 CHAT_ID = "6141474899"
@@ -22,9 +22,8 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"❌ Telegram Error: {e}", flush=True)
 
-# Headers قوية جداً لتجاوز الحماية ومنع خطأ 403 من Bybit
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://www.bybit.com/"
@@ -34,13 +33,13 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Custom Strategy Radar is Running and Connected")
+        self.wfile.write(b"Custom Strategy Radar is Active on New Account")
     def log_message(self, format, *args):
         pass
 
 def run_server():
     port = int(os.environ.get("PORT", 10000))
-    print(f"🌐 خادم الويب يفتح على البورت: {port}", flush=True)
+    print(f"🌐 خادم الويب يعمل على البورت: {port}", flush=True)
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
     server.serve_forever()
 
@@ -50,6 +49,7 @@ sent_alerts = {}
 
 def get_top_futures_symbols(limit=500):
     try:
+        print("🔍 جاري جلب العملات من Bybit...", flush=True)
         url = "https://api.bybit.com/v5/market/tickers?category=linear"
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
@@ -68,9 +68,9 @@ def get_top_futures_symbols(limit=500):
             print(f"🔥 [نجاح] تم جلب واعتماد {len(top_symbols)} عملة للفحص.", flush=True)
             return top_symbols
         else:
-            print(f"⚠️ خطأ جلب العملات (كود الاستجابة): {response.status_code}", flush=True)
+            print(f"⚠️ خطأ Bybit: كود الاستجابة {response.status_code}", flush=True)
     except Exception as e:
-        print(f"❌ خطأ في الاتصال لجلب العملات: {e}", flush=True)
+        print(f"❌ خطأ في جلب العملات: {e}", flush=True)
     return []
 
 BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
@@ -99,8 +99,8 @@ def get_klines(symbol, interval, limit=25):
     return []
 
 def main():
-    print("🟢 [الدالة الرئيسية] بدأ تشغيل الرادار والاستراتيجية...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجية المخصصة (تم إصلاح اتصال Bybit).")
+    print("🟢 [دالة التشغيل الرئيسية] بدأت العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار على الحساب الجديد بنجاح.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -114,7 +114,7 @@ def main():
                 symbols = get_top_futures_symbols(limit=500)
                 last_update_time = current_time
                 if not symbols:
-                    print("⚠️ لم يتم العثور على عملات، إعادة المحاولة خلال 30 ثانية...", flush=True)
+                    print("⚠️ لم يتم جلب العملات، إعادة المحاولة خلال 30 ثانية...", flush=True)
                     time.sleep(30)
                     continue
 
@@ -160,7 +160,7 @@ def main():
                     )
 
                     if not cond_c2:
-                        print(f"    ❌ [استبعاد C2 (لم تكسر القاع)] {symbol.upper()} | {tf}", flush=True)
+                        print(f"    ❌ [استبعاد C2] {symbol.upper()} | {tf}", flush=True)
                         continue
 
                     # 3. الشمعة الثالثة
@@ -170,22 +170,22 @@ def main():
                     )
 
                     if not cond_c3:
-                        print(f"    ❌ [استبعاد C3 (خارج النطاق)] {symbol.upper()} | {tf}", flush=True)
+                        print(f"    ❌ [استبعاد C3] {symbol.upper()} | {tf}", flush=True)
                         continue
 
-                    # 4. التجميع والكسر الصعودي
+                    # 4. التجميع والكسر
                     latest_c = candles[-2]
                     breakout_found = (latest_c['c'] > latest_c['o'] and latest_c['c'] > h2)
 
                     if breakout_found:
                         key = f"{symbol}_{tf}_{latest_c['time']}_custom_strategy"
                         if key not in sent_alerts:
-                            sent_alerts[key] = true = True
+                            sent_alerts[key] = True
                             msg = f"⭐ *إشارة قوية مطابقة للرادار*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg)
                             print(f"🚨 [إشارة مطابقة مؤكدة] {symbol.upper()} | {tf}", flush=True)
                     else:
-                        print(f"    ❌ [استبعاد - بانتظار الكسر الصعودي] {symbol.upper()} | {tf}", flush=True)
+                        print(f"    ❌ [استبعاد - بانتظار الكسر] {symbol.upper()} | {tf}", flush=True)
 
                     time.sleep(0.005)
 
