@@ -79,8 +79,8 @@ def get_klines(symbol, interval, limit=25):
     return []
 
 def main():
-    print("🟢 [رادار الاستراتيجية المخصصة - قائمة صريحة] بدأ العمل والطباعة الحية مفعلة...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بنجاح باستخدام قائمة العملات المكتوبة صراحة.")
+    print("🟢 [رادار الأسباب والحالة الحية] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار مع تفعيل طباعة أسباب الاستبعاد.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = EXPLICIT_SYMBOLS
@@ -88,16 +88,15 @@ def main():
 
     while True:
         try:
-            print(f"\n🔄 [بدء الدورة رقم {cycle}] جاري فحص {len(symbols)} عملة مدرجة صراحةً...", flush=True)
+            print(f"\n🔄 [بدء الدورة رقم {cycle}] فحص {len(symbols)} عملة...", flush=True)
 
             for idx, symbol in enumerate(symbols):
-                print(f"➡️ [{idx+1}/{len(symbols)}] فحص العملة: {symbol.upper()}", flush=True)
-                
                 for tf in timeframes:
                     candles = get_klines(symbol, tf, limit=25)
                     if not candles or len(candles) < 15:
                         continue
                     
+                    # 1. فحص القمة
                     try:
                         recent_highs = [c['h'] for c in candles[-15:-5]]
                         is_far_from_peak = candles[-5]['h'] <= max(recent_highs)
@@ -105,6 +104,7 @@ def main():
                         is_far_from_peak = True
 
                     if not is_far_from_peak:
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: قريبة جداً من القمة", flush=True)
                         continue
 
                     c1, c2, c3 = candles[-6], candles[-5], candles[-4]
@@ -129,16 +129,17 @@ def main():
 
                     lw3 = min(o3, c3_val) - l3
 
-                    # 1. مواصفات الشمعة الأولى
+                    # 2. فحص الشمعة الأولى C1
                     cond_c1 = (
                         (total_len1 * 0.50 <= b1 <= total_len1 * 0.70) and
                         (total_len1 * 0.01 <= lw1 <= total_len1 * 0.35) and
                         (total_len1 * 0.01 <= uw1 <= total_len1 * 0.15)
                     )
                     if not cond_c1:
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: مواصفات الشمعة الأولى (C1) غير مطابقة", flush=True)
                         continue
 
-                    # 2. مواصفات الشمعة الثانية
+                    # 3. فحص الشمعة الثانية C2
                     cond_c2 = (
                         c2_val < o2 and 
                         c2_val < l1 and 
@@ -147,18 +148,20 @@ def main():
                         (total_len2 * 0.01 <= uw2 <= total_len2 * 0.15)
                     )
                     if not cond_c2:
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: مواصفات الشمعة الثانية (C2 / كسر القاع) غير مطابقة", flush=True)
                         continue
 
-                    # 3. مواصفات الشمعة الثالثة
+                    # 4. فحص الشمعة الثالثة C3
                     cond_c3 = (
                         c3_val > o3 and 
                         l2 <= c3_val <= h2 and 
                         lw3 < lw2
                     )
                     if not cond_c3:
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: مواصفات الشمعة الثالثة (C3) غير مطابقة", flush=True)
                         continue
 
-                    # 4. التجميع والكسر
+                    # 5. التجميع والكسر
                     subsequent_candles = candles[-3:-1]
                     consolidation_ok = True
                     breakout_found = False
@@ -181,12 +184,14 @@ def main():
                             msg = f"⭐ *إشارة الاستراتيجية المخصصة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg)
                             print(f"🚨 [إشارة مطابقة ناجحة وتم الإرسال] {symbol.upper()} | {tf}", flush=True)
+                    else:
+                        print(f"  ❌ [{symbol.upper()} | {tf}] استبعاد: شروط التجميع أو الكسر اللاحق غير مطابقة", flush=True)
 
                     time.sleep(0.005)
 
             print(f"✅ [اكتملت الدورة رقم {cycle}] جاري البدء في الدورة التالية...", flush=True)
             cycle += 1
-            time.sleep(5)
+            time.sleep(3)
 
         except Exception as e:
             print(f"⚠️ خطأ عام في الحلقة: {e}", flush=True)
