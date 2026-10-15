@@ -9,7 +9,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 # --- فرض الطباعة الفورية اللحظية ---
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
-print("🔥 [إقلاع النظام] بدأ تشغيل السكريبت...", flush=True)
+print("🔥 [إقلاع النظام] بدأ تشغيل السكريبت بنجاح...", flush=True)
 
 TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
 CHAT_ID = "6141474899"
@@ -22,25 +22,15 @@ def send_telegram_message(message):
     except Exception as e:
         print(f"❌ Telegram Error: {e}", flush=True)
 
-# ترويسات متصفح حقيقي لتجاوز حماية Cloudflare و 403
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Cache-Control": "max-age=0"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 }
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Custom Strategy Radar is Active and Bypassing 403")
+        self.wfile.write(b"Radar is Active via Binance Futures API")
     def log_message(self, format, *args):
         pass
 
@@ -56,65 +46,60 @@ sent_alerts = {}
 
 def get_top_futures_symbols(limit=500):
     try:
-        print("🔍 جاري جلب العملات من Bybit عبر رابط البديل الآمن...", flush=True)
-        url = "https://api.bybit.com/v5/market/tickers?category=linear"
+        print("🔍 جاري جلب العملات من Binance Futures...", flush=True)
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        response = requests.get(url, headers=HEADERS, timeout=10)
         
-        # استخدام سشن (Session) للحفاظ على اتصال حقيقي وتجاوز الفلترة
-        session = requests.Session()
-        response = session.get(url, headers=HEADERS, timeout=15)
-        
-        print(f"📡 حالة الاستجابة من Bybit: {response.status_code}", flush=True)
+        print(f"📡 حالة الاستجابة من Binance: {response.status_code}", flush=True)
         
         if response.status_code == 200:
-            data = response.json().get("result", {}).get("list", [])
+            data = response.json()
             movers = []
             for item in data:
                 symbol = item.get('symbol', '')
                 if symbol.endswith('USDT'):
                     try:
-                        pct = float(item.get('price24hPcnt', 0)) * 100
+                        pct = float(item.get('priceChangePercent', 0))
                         movers.append((symbol.lower(), pct))
                     except:
                         continue
             movers.sort(key=lambda x: x[1], reverse=True)
             top_symbols = [m[0] for m in movers[:limit]]
-            print(f"🔥 [نجاح تام] تم جلب واعتماد {len(top_symbols)} عملة للفحص.", flush=True)
+            print(f"🔥 [نجاح تام] تم جلب واعتماد {len(top_symbols)} عملة فيوتشر للفحص.", flush=True)
             return top_symbols
         else:
-            print(f"⚠️ خطأ Bybit: كود الاستجابة {response.status_code}", flush=True)
+            print(f"⚠️ خطأ Binance: كود الاستجابة {response.status_code}", flush=True)
     except Exception as e:
         print(f"❌ خطأ في جلب العملات: {e}", flush=True)
     return []
 
-BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
+# تحويل الفريمات لتتوافق مع Binance API
+BINANCE_INTERVALS = {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h'}
 
 def get_klines(symbol, interval, limit=25):
     try:
-        bybit_tf = BYBIT_INTERVALS.get(interval, '60')
-        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol.upper()}&interval={bybit_tf}&limit={limit}"
-        session = requests.Session()
-        response = session.get(url, headers=HEADERS, timeout=8)
+        binance_tf = BINANCE_INTERVALS.get(interval, '1h')
+        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={binance_tf}&limit={limit}"
+        response = requests.get(url, headers=HEADERS, timeout=8)
         if response.status_code == 200:
-            res_json = response.json()
-            if res_json.get("retCode") == 0:
-                raw_data = res_json.get("result", {}).get("list", [])
-                candles = []
-                for item in reversed(raw_data):
-                    candles.append({
-                        'time': int(item[0]),
-                        'o': float(item[1]),
-                        'h': float(item[2]),
-                        'l': float(item[3]),
-                        'c': float(item[4])
-                    })
-                return candles
+            raw_data = response.json()
+            candles = []
+            for item in raw_data:
+                candles.append({
+                    'time': int(item[0]),
+                    'o': float(item[1]),
+                    'h': float(item[2]),
+                    'l': float(item[3]),
+                    'c': float(item[4])
+                })
+            return candles
     except:
         pass
     return []
 
 def main():
     print("🟢 [دالة التشغيل الرئيسية] بدأت العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار على الحساب الجديد (تم تخطي حظر 403 بنجاح).")
+    send_telegram_message("🟢 بدأ تشغيل الرادار (تم التحويل إلى Binance Futures لتجاوز الحظر).")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
