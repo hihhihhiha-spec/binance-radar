@@ -39,29 +39,19 @@ threading.Thread(target=run_server, daemon=True).start()
 sent_alerts = {}
 HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 
-def get_top_futures_symbols(limit=500):
-    try:
-        print("🔍 جاري جلب قائمة العملات من Bybit...", flush=True)
-        url = "https://api.bybit.com/v5/market/tickers?category=linear"
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            data = response.json().get("result", {}).get("list", [])
-            movers = []
-            for item in data:
-                symbol = item.get('symbol', '')
-                if symbol.endswith('USDT'):
-                    try:
-                        pct = float(item.get('price24hPcnt', 0)) * 100
-                        movers.append((symbol.lower(), pct))
-                    except:
-                        continue
-            movers.sort(key=lambda x: x[1], reverse=True)
-            top_symbols = [m[0] for m in movers[:limit]]
-            print(f"🔥 [نجاح] تم جلب واعتماد {len(top_symbols)} عملة للفحص الحي.", flush=True)
-            return top_symbols
-    except Exception as e:
-        print(f"❌ خطأ جلب العملات: {e}", flush=True)
-    return []
+# --- قائمة الـ 100 عملة المكتوبة صراحة داخل الكود ---
+EXPLICIT_SYMBOLS = [
+    "btcusdt", "ethusdt", "solusdt", "xrpusdt", "dogeusdt", "adausdt", "avaxusdt", "linkusdt", "suiusdt", "bnbusdt",
+    "nearusdt", "pepeusdt", "wifusdt", "renderusdt", "fetusdt", "bonkusdt", "flokiusdt", "shibusdt", "arbusdt", "opusdt",
+    "aptusdt", "injusdt", "ftmusdt", "grtusdt", "uniusdt", "aaveusdt", "ldousdt", "pendleusdt", "tiausdt", "seiust",
+    "blurusdt", "atomusdt", "dotusdt", "xlmusdt", "ltcusdt", "bchusdt", "etcusdt", "filusdt", "hbarusdt", "galausdt",
+    "thetausdt", "egldusdt", "flowusdt", "chzusdt", "sandusdt", "manausdt", "axsusdt", "enjusdt", "runeusdt", "kavausdt",
+    "compusdt", "snxusdt", "crvusdt", "batusdt", "zrxusdt", "sushiusdt", "1inchusdt", "ankrusdt", "oceanusdt", "ctsiusdt",
+    "qtumusdt", "iostusdt", "zilusdt", "wavesusdt", "icxusdt", "omgusdt", "zenusdt", "rvnusdt", "coreusdt", "notusdt",
+    "bomeusdt", "slerfusdt", "peopleusdt", "omdusdt", "rsrusdt", "cotiusdt", "kncusdt", "straxusdt", "sysusdt", "celrusdt",
+    "chrusdt", "aliceusdt", "tlmusdt", "reefusdt", "pundixusdt", "stptusdt", "dgbusdt", "ognusdt", "alphausdt", "phausdt",
+    "zecusdt", "dashusdt", "scusdt", "jstusdt", "sunusdt", "dentusdt", "hotusdt", "mtlusdt", "ognusdt", "wavesusdt"
+]
 
 BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
 
@@ -89,29 +79,18 @@ def get_klines(symbol, interval, limit=25):
     return []
 
 def main():
-    print("🟢 [رادار الاستراتيجية المخصصة] بدأ العمل والطباعة الحية مفعلة...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بنجاح مع تفعيل المراقبة الحية.")
+    print("🟢 [رادار الاستراتيجية المخصصة - قائمة صريحة] بدأ العمل والطباعة الحية مفعلة...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بنجاح باستخدام قائمة العملات المكتوبة صراحة.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
-    symbols = []
-    last_update_time = datetime.min
+    symbols = EXPLICIT_SYMBOLS
     cycle = 1
 
     while True:
         try:
-            current_time = datetime.now()
-            if not symbols or (current_time - last_update_time >= timedelta(hours=3)):
-                symbols = get_top_futures_symbols(limit=500)
-                last_update_time = current_time
-                if not symbols:
-                    print("⏳ إعادة محاولة جلب العملات بعد قليل...", flush=True)
-                    time.sleep(30)
-                    continue
-
-            print(f"\n🔄 [بدء الدورة رقم {cycle}] جاري فحص العملات والفريمات...", flush=True)
+            print(f"\n🔄 [بدء الدورة رقم {cycle}] جاري فحص {len(symbols)} عملة مدرجة صراحةً...", flush=True)
 
             for idx, symbol in enumerate(symbols):
-                # طباعة اسم العملة الجاري فحصها لتتابع حركتها أمامك
                 print(f"➡️ [{idx+1}/{len(symbols)}] فحص العملة: {symbol.upper()}", flush=True)
                 
                 for tf in timeframes:
@@ -119,7 +98,6 @@ def main():
                     if not candles or len(candles) < 15:
                         continue
                     
-                    # --- شرط: منطقة التجميع بعيدة عن القمة ---
                     try:
                         recent_highs = [c['h'] for c in candles[-15:-5]]
                         is_far_from_peak = candles[-5]['h'] <= max(recent_highs)
