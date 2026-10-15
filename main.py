@@ -9,7 +9,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 # --- فرض الطباعة الفورية اللحظية ---
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
-print("🔥 [إقلاع النظام] بدأ تشغيل السكريبت بنجاح...", flush=True)
+print("🔥 [إقلاع النظام] بدأ تشغيل الرادار على Bybit...", flush=True)
 
 TELEGRAM_TOKEN = "8866274181:AAEU7Ofsem4EW87PNo1Uk_sNs0VSejcSmvI"
 CHAT_ID = "6141474899"
@@ -23,14 +23,16 @@ def send_telegram_message(message):
         print(f"❌ Telegram Error: {e}", flush=True)
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Referer": "https://www.bybit.com/"
 }
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Radar is Active via Binance Futures API")
+        self.wfile.write(b"Bybit Radar is Active")
     def log_message(self, format, *args):
         pass
 
@@ -46,60 +48,62 @@ sent_alerts = {}
 
 def get_top_futures_symbols(limit=500):
     try:
-        print("🔍 جاري جلب العملات من Binance Futures...", flush=True)
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        print("🔍 جاري جلب العملات من Bybit...", flush=True)
+        # استخدام رابط بديل ومباشر لـ Bybit API لتجاوز الفلترة
+        url = "https://api.bybit.com/v5/market/tickers?category=linear"
         
-        print(f"📡 حالة الاستجابة من Binance: {response.status_code}", flush=True)
+        response = requests.get(url, headers=HEADERS, timeout=12)
+        print(f"📡 حالة الاستجابة من Bybit: {response.status_code}", flush=True)
         
         if response.status_code == 200:
-            data = response.json()
+            data = response.json().get("result", {}).get("list", [])
             movers = []
             for item in data:
                 symbol = item.get('symbol', '')
                 if symbol.endswith('USDT'):
                     try:
-                        pct = float(item.get('priceChangePercent', 0))
+                        pct = float(item.get('price24hPcnt', 0)) * 100
                         movers.append((symbol.lower(), pct))
                     except:
                         continue
             movers.sort(key=lambda x: x[1], reverse=True)
             top_symbols = [m[0] for m in movers[:limit]]
-            print(f"🔥 [نجاح تام] تم جلب واعتماد {len(top_symbols)} عملة فيوتشر للفحص.", flush=True)
+            print(f"🔥 [نجاح تام] تم جلب واعتماد {len(top_symbols)} عملة من Bybit للفحص.", flush=True)
             return top_symbols
         else:
-            print(f"⚠️ خطأ Binance: كود الاستجابة {response.status_code}", flush=True)
+            print(f"⚠️ خطأ Bybit: كود الاستجابة {response.status_code}", flush=True)
     except Exception as e:
-        print(f"❌ خطأ في جلب العملات: {e}", flush=True)
+        print(f"❌ خطأ في جلب العملات من Bybit: {e}", flush=True)
     return []
 
-# تحويل الفريمات لتتوافق مع Binance API
-BINANCE_INTERVALS = {'1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h'}
+BYBIT_INTERVALS = {'1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60', '4h': '240'}
 
 def get_klines(symbol, interval, limit=25):
     try:
-        binance_tf = BINANCE_INTERVALS.get(interval, '1h')
-        url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol.upper()}&interval={binance_tf}&limit={limit}"
-        response = requests.get(url, headers=HEADERS, timeout=8)
+        bybit_tf = BYBIT_INTERVALS.get(interval, '60')
+        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol.upper()}&interval={bybit_tf}&limit={limit}"
+        response = requests.get(url, headers=HEADERS, timeout=6)
         if response.status_code == 200:
-            raw_data = response.json()
-            candles = []
-            for item in raw_data:
-                candles.append({
-                    'time': int(item[0]),
-                    'o': float(item[1]),
-                    'h': float(item[2]),
-                    'l': float(item[3]),
-                    'c': float(item[4])
-                })
-            return candles
+            res_json = response.json()
+            if res_json.get("retCode") == 0:
+                raw_data = res_json.get("result", {}).get("list", [])
+                candles = []
+                for item in reversed(raw_data):
+                    candles.append({
+                        'time': int(item[0]),
+                        'o': float(item[1]),
+                        'h': float(item[2]),
+                        'l': float(item[3]),
+                        'c': float(item[4])
+                    })
+                return candles
     except:
         pass
     return []
 
 def main():
-    print("🟢 [دالة التشغيل الرئيسية] بدأت العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار (تم التحويل إلى Binance Futures لتجاوز الحظر).")
+    print("🟢 [دالة التشغيل الرئيسية] بدأت العمل على Bybit...", flush=True)
+    send_telegram_message("🟢 تم تحويل الرادار للعمل على منصة Bybit بنجاح.")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -113,11 +117,11 @@ def main():
                 symbols = get_top_futures_symbols(limit=500)
                 last_update_time = current_time
                 if not symbols:
-                    print("⚠️ لم يتم جلب العملات، إعادة المحاولة خلال 30 ثانية...", flush=True)
+                    print("⚠️ لم يتم جلب العملات من Bybit، إعادة المحاولة خلال 30 ثانية...", flush=True)
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة للاستراتيجية...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة على Bybit للاستراتيجية...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
@@ -180,7 +184,7 @@ def main():
                         key = f"{symbol}_{tf}_{latest_c['time']}_custom_strategy"
                         if key not in sent_alerts:
                             sent_alerts[key] = True
-                            msg = f"⭐ *إشارة قوية مطابقة للرادار*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg = f"⭐ *إشارة قوية مطابقة للرادار (Bybit)*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg)
                             print(f"🚨 [إشارة مطابقة مؤكدة] {symbol.upper()} | {tf}", flush=True)
                     else:
