@@ -25,7 +25,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Single Custom Strategy Radar is Active")
+        self.wfile.write(b"Optimized Custom Strategy Radar with Full Logging is Active")
     def log_message(self, format, *args):
         pass
 
@@ -88,8 +88,8 @@ def get_klines(symbol, interval, limit=25):
     return []
 
 def main():
-    print("🟢 [رادار الاستراتيجية المخصصة الدقيقة] بدأ العمل...", flush=True)
-    send_telegram_message("🟢 بدأ تشغيل الرادار بالاستراتيجية المخصصة الجديدة (مع الطباعة الكاملة).")
+    print("🟢 [رادار الاستراتيجية المرن مع الطباعة الكاملة] بدأ العمل...", flush=True)
+    send_telegram_message("🟢 بدأ تشغيل الرادار بالنسخة المرنة (مع تفعيل سجلات الطباعة التفصيلية).")
 
     timeframes = ['1m', '5m', '15m', '30m', '1h', '4h']
     symbols = []
@@ -106,7 +106,7 @@ def main():
                     time.sleep(30)
                     continue
 
-            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة للاستراتيجية الجديدة...", flush=True)
+            print(f"\n🔄 [دورة رقم {cycle}] فحص {len(symbols)} عملة بالنسخة المرنة...", flush=True)
 
             for idx, symbol in enumerate(symbols):
                 for tf in timeframes:
@@ -114,18 +114,6 @@ def main():
                     if not candles or len(candles) < 15:
                         continue
                     
-                    # --- شرط: منطقة التجميع بعيدة عن القمة (ابتداءً من 5 شمعات فما فوق) ---
-                    try:
-                        recent_highs = [c['h'] for c in candles[-15:-5]]
-                        is_far_from_peak = candles[-5]['h'] <= max(recent_highs)
-                    except:
-                        is_far_from_peak = True
-
-                    if not is_far_from_peak:
-                        print(f"    ❌ [استبعاد - القريبة من القمة] {symbol.upper()} | {tf}", flush=True)
-                        continue
-
-                    # الشمعة الأولى والثانية والثالثة والشموع اللاحقة للتجميع والكسر
                     c1, c2, c3 = candles[-6], candles[-5], candles[-4]
                     
                     o1, h1, l1, c1_val = c1['o'], c1['h'], c1['l'], c1['c']
@@ -138,82 +126,54 @@ def main():
                     if total_len1 <= 0 or total_len2 <= 0:
                         continue
 
-                    # قياسات الشمعة الأولى
                     b1 = abs(o1 - c1_val)
                     uw1 = h1 - max(o1, c1_val)
                     lw1 = min(o1, c1_val) - l1
 
-                    # قياسات الشمعة الثانية
-                    b2 = abs(o2 - c2_val)
-                    uw2 = h2 - max(o2, c2_val)
-                    lw2 = min(o2, c2_val) - l2
-
-                    # قياسات الشمعة الثالثة
-                    lw3 = min(o3, c3_val) - l3
-
-                    # 1. مواصفات الشمعة الأولى
+                    # 1. شروط الشمعة الأولى
                     cond_c1 = (
-                        (total_len1 * 0.50 <= b1 <= total_len1 * 0.70) and
-                        (total_len1 * 0.01 <= lw1 <= total_len1 * 0.35) and
-                        (total_len1 * 0.01 <= uw1 <= total_len1 * 0.15)
+                        (b1 >= total_len1 * 0.40) and
+                        (lw1 >= total_len1 * 0.01) and
+                        (uw1 >= total_len1 * 0.01)
                     )
 
                     if not cond_c1:
                         print(f"    ❌ [استبعاد C1] {symbol.upper()} | {tf}", flush=True)
                         continue
 
-                    # 2. مواصفات الشمعة الثانية (حمراء + كسر قاع الأولى + القياسات الدقيقة)
+                    # 2. الشمعة الثانية
                     cond_c2 = (
-                        c2_val < o2 and  # حمراء
-                        c2_val < l1 and  # إغلاق تحت قاع الديل السفلي للشمعة الأولى تماماً
-                        (total_len2 * 0.40 <= b2 <= total_len2 * 0.60) and  # بحدود 50%
-                        (total_len2 * 0.01 <= lw2 <= total_len2 * 0.35) and  # ديل سفلي الأطول برمجياً
-                        (total_len2 * 0.01 <= uw2 <= total_len2 * 0.15)      # ديل علوي
+                        c2_val < o2 and
+                        c2_val < l1
                     )
 
                     if not cond_c2:
-                        print(f"    ❌ [استبعاد C2] {symbol.upper()} | {tf}", flush=True)
+                        print(f"    ❌ [استبعاد C2 (لم تكسر القاع أو ليست حمراء)] {symbol.upper()} | {tf}", flush=True)
                         continue
 
-                    # 3. مواصفات الشمعة الثالثة
+                    # 3. الشمعة الثالثة
                     cond_c3 = (
-                        c3_val > o3 and  # خضراء
-                        l2 <= c3_val <= h2 and  # تغلق داخل نطاق الشمعة الثانية
-                        lw3 < lw2  # الديل السفلي أقصر من ديل الشمعة الثانية
+                        c3_val > o3 and
+                        l2 <= c3_val <= h2
                     )
 
                     if not cond_c3:
-                        print(f"    ❌ [استبعاد C3] {symbol.upper()} | {tf}", flush=True)
+                        print(f"    ❌ [استبعاد C3 (خارج نطاق الثانية)] {symbol.upper()} | {tf}", flush=True)
                         continue
 
-                    # 4. شموع التجميع والكسر اللاحقة (داخل نطاق الشمعة الثانية ثم شمعة تكسر وتغلق فوقها)
-                    # فحص الشموع من بعد الثالثة وحتى الشمعة الأخيرة الحالية (-2)
-                    subsequent_candles = candles[-3:-1] # الشموع اللاحقة للتجميع والكسر
-                    consolidation_ok = True
-                    breakout_found = False
-
-                    for sc in subsequent_candles:
-                        # يجب أن تكون داخل نطاق الشمعة الثانية أو تكسرها صعوداً بإغلاق كامل
-                        if sc['l'] < l2 or sc['h'] > h2:
-                            # هل هي شمعة الكسر المطلوبة؟
-                            if sc['c'] > o2 and sc['c'] > h2:
-                                breakout_found = True
-                            else:
-                                consolidation_ok = False
-
+                    # 4. التجميع والكسر
                     latest_c = candles[-2]
-                    if not breakout_found and latest_c['c'] > h2 and latest_c['c'] > latest_c['o']:
-                        breakout_found = True
+                    breakout_found = (latest_c['c'] > latest_c['o'] and latest_c['c'] > h2)
 
-                    if consolidation_ok and breakout_found:
-                        key = f"{symbol}_{tf}_{latest_c['time']}_custom_strategy"
+                    if breakout_found:
+                        key = f"{symbol}_{tf}_{latest_c['time']}_custom_strategy_opt"
                         if key not in sent_alerts:
                             sent_alerts[key] = True
-                            msg = f"⭐ *إشارة الاستراتيجية المخصصة الجديدة*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
+                            msg = f"⭐ *إشارة قوية مطابقة للرادار*\n🔹 العملة: `{symbol.upper()}`\n⏱️ الفريم: `{tf}`"
                             send_telegram_message(msg)
-                            print(f"🚨 [إشارة مطابقة ناجحة] {symbol.upper()} | {tf}", flush=True)
+                            print(f"🚨 [إشارة مطابقة مؤكدة وبجاح] {symbol.upper()} | {tf}", flush=True)
                     else:
-                        print(f"    ❌ [استبعاد - التجميع/الكسر] {symbol.upper()} | {tf}", flush=True)
+                        print(f"    ❌ [استبعاد - بانتظار الكسر الصعودي الصحيح] {symbol.upper()} | {tf}", flush=True)
 
                     time.sleep(0.005)
 
